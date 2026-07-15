@@ -7,6 +7,7 @@ const path = require('node:path');
 const {
   collectDueAlarms,
   normalizeImportedData,
+  readJsonWithBackup,
   writeJsonAtomic,
   clampWindowPosition,
 } = require('../timer-core');
@@ -74,6 +75,15 @@ test('import rejects a ringtone larger than 5 MB', () => {
   );
 });
 
+test('import accepts stored file-url ringtones', () => {
+  const imported = normalizeImportedData({
+    customRingtone: 'file:///C:/Users/example/AppData/Roaming/DesktopTimer/ringtones/custom-ringtone.mp3',
+    customRingtoneName: 'focus.mp3',
+  });
+  assert.equal(imported.customRingtoneName, 'focus.mp3');
+  assert.match(imported.customRingtone, /^file:\/\/\//);
+});
+
 test('atomic JSON writes keep a readable backup of the previous data', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'zhiyu-timer-'));
   const file = path.join(dir, 'timer-data.json');
@@ -90,4 +100,31 @@ test('pet window position is clamped to the display work area', () => {
     clampWindowPosition(-2500, 1200, 180, 260, bounds),
     { x: -1920, y: 780 },
   );
+});
+
+test('pet window position is clamped at every edge of the work area', () => {
+  const bounds = { x: 0, y: 0, width: 1440, height: 900 };
+  const size = { width: 280, height: 340 };
+  assert.deepEqual(clampWindowPosition(-100, -100, size.width, size.height, bounds), { x: 0, y: 0 });
+  assert.deepEqual(clampWindowPosition(2000, -100, size.width, size.height, bounds), { x: 1160, y: 0 });
+  assert.deepEqual(clampWindowPosition(-100, 2000, size.width, size.height, bounds), { x: 0, y: 560 });
+  assert.deepEqual(clampWindowPosition(2000, 2000, size.width, size.height, bounds), { x: 1160, y: 560 });
+});
+
+test('pet window position supports displays placed left or above the primary display', () => {
+  const leftDisplay = { x: -1920, y: 0, width: 1920, height: 1040 };
+  const upperDisplay = { x: 0, y: -1080, width: 1920, height: 1040 };
+  assert.deepEqual(clampWindowPosition(-2500, 1200, 280, 340, leftDisplay), { x: -1920, y: 700 });
+  assert.deepEqual(clampWindowPosition(2200, -1500, 280, 340, upperDisplay), { x: 1640, y: -1080 });
+});
+
+test('corrupt JSON data can be restored from its backup', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'timer-data-'));
+  const file = path.join(dir, 'timer-data.json');
+  fs.writeFileSync(file, '{ broken json', 'utf8');
+  fs.writeFileSync(`${file}.bak`, JSON.stringify({ alarms: [{ id: 7, time: '07:30' }] }), 'utf8');
+
+  const result = readJsonWithBackup(file);
+  assert.equal(result.restoredFromBackup, true);
+  assert.equal(result.value.alarms[0].time, '07:30');
 });

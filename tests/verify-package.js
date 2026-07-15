@@ -6,7 +6,17 @@ const asar = require('@electron/asar');
 
 const root = path.join(__dirname, '..');
 const archive = path.join(root, 'dist', 'win-unpacked', 'resources', 'app.asar');
-const shippedFiles = ['main.js', 'timer-core.js', 'preload.js', 'index.html', 'pet.html'];
+const shippedFiles = [
+  'main.js',
+  'timer-core.js',
+  'preload.js',
+  'index.html',
+  'styles.css',
+  'renderer.js',
+  'pet.html',
+  'pet.css',
+  'pet.js',
+];
 
 assert.ok(fs.existsSync(archive), 'Build output is missing; run npm run build-portable');
 
@@ -21,10 +31,14 @@ for (const file of shippedFiles) {
 }
 
 const packagedPet = asar.extractFile(archive, 'pet.html').toString('utf8');
+const packagedIndex = asar.extractFile(archive, 'index.html').toString('utf8');
+const packagedPetCss = asar.extractFile(archive, 'pet.css').toString('utf8');
 const packagedMain = asar.extractFile(archive, 'main.js').toString('utf8');
 assert.match(packagedMain, /PET_WINDOW_WIDTH\s*=\s*280/, 'Packaged pet window width is stale');
 assert.match(packagedMain, /PET_WINDOW_HEIGHT\s*=\s*340/, 'Packaged pet window height is stale');
-assert.match(packagedPet, /width:\s*100vw;[\s\S]*height:\s*100vh;/, 'Pet surface contract is missing');
-assert.match(packagedPet, /onpointercancel\s*=\s*finishDrag/, 'Pointer cancellation handling is missing');
+assert.match(packagedPetCss, /width:\s*100vw;[\s\S]*height:\s*100vh;/, 'Pet surface contract is missing');
+assert.match(asar.extractFile(archive, 'pet.js').toString('utf8'), /onpointercancel\s*=\s*finishDrag/, 'Pointer cancellation handling is missing');
+assert.doesNotMatch(packagedIndex, /unsafe-inline/, 'Packaged index CSP still allows inline code');
+assert.doesNotMatch(packagedPet, /unsafe-inline/, 'Packaged pet CSP still allows inline code');
 
 console.log('Packaged application matches the reviewed source.');

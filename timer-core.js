@@ -30,7 +30,11 @@ function parseAlarmTime(value) {
 
 function validateRingtone(value) {
   if (value === null || value === undefined || value === '') return null;
-  if (typeof value !== 'string' || !/^data:audio\/(?:wav|x-wav|mpeg);base64,/i.test(value)) {
+  if (typeof value !== 'string') {
+    throw new Error('Ringtone must be a WAV or MP3 audio file');
+  }
+  if (/^file:\/\/\/.+\.(?:wav|mp3)$/i.test(value)) return value;
+  if (!/^data:audio\/(?:wav|x-wav|mpeg);base64,/i.test(value)) {
     throw new Error('Ringtone must be a WAV or MP3 audio file');
   }
   const payload = value.slice(value.indexOf(',') + 1);
@@ -129,6 +133,23 @@ function writeJsonAtomic(filePath, value) {
   fs.renameSync(temporary, filePath);
 }
 
+function readJsonWithBackup(filePath) {
+  if (!fs.existsSync(filePath)) return { value: null, restoredFromBackup: false };
+  try {
+    return {
+      value: JSON.parse(fs.readFileSync(filePath, 'utf8')),
+      restoredFromBackup: false,
+    };
+  } catch (primaryError) {
+    const backup = `${filePath}.bak`;
+    if (!fs.existsSync(backup)) throw primaryError;
+    return {
+      value: JSON.parse(fs.readFileSync(backup, 'utf8')),
+      restoredFromBackup: true,
+    };
+  }
+}
+
 function clampWindowPosition(x, y, width, height, workArea) {
   return {
     x: Math.max(workArea.x, Math.min(Math.round(x), workArea.x + workArea.width - width)),
@@ -141,6 +162,7 @@ module.exports = {
   clampWindowPosition,
   collectDueAlarms,
   normalizeImportedData,
+  readJsonWithBackup,
   validateRingtone,
   writeJsonAtomic,
 };

@@ -1,0 +1,380 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --pet-time-bg: rgba(255, 255, 255, 0.85);
+  --pet-time-color: #6c5ce7;
+  --pet-bubble-bg: white;
+  --pet-bubble-color: #2d3436;
+  --mini-info-bg: rgba(255, 255, 255, 0.95);
+  --mini-info-color: #2d3436;
+  --mini-info-title-color: #6c5ce7;
+}
+
+[data-theme="dark"] {
+  --pet-time-bg: rgba(37, 37, 64, 0.9);
+  --pet-time-color: #a29bfe;
+  --pet-bubble-bg: #353555;
+  --pet-bubble-color: #e0e0e0;
+  --mini-info-bg: rgba(37, 37, 64, 0.95);
+  --mini-info-color: #e0e0e0;
+  --mini-info-title-color: #a29bfe;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+body {
+  font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+}
+
+body.alarm-flash {
+  animation: bodyFlash 1.2s ease-out;
+}
+@keyframes bodyFlash {
+  0%   { background: rgba(255, 107, 107, 0.28); box-shadow: inset 0 0 24px rgba(255, 107, 107, 0.5); }
+  35%  { background: rgba(255, 107, 107, 0.08); box-shadow: inset 0 0 36px rgba(255, 107, 107, 0.38); }
+  65%  { background: rgba(255, 107, 107, 0.18); box-shadow: inset 0 0 20px rgba(255, 107, 107, 0.3); }
+  100% { background: transparent; box-shadow: none; }
+}
+
+/* 宠物容器 */
+.pet-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: visible;
+  cursor: move;
+  touch-action: none;
+}
+
+.pet-float-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 84px 0 24px;
+}
+
+/* 宠物图片 */
+.pet-image {
+  width: 150px;
+  height: 200px;
+  border-radius: 12px;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  cursor: pointer;
+  transition: transform 180ms ease, box-shadow 220ms ease;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 8px 20px rgba(45, 52, 54, 0.2), 0 0 0 1px rgba(99, 102, 241, 0.16);
+}
+
+.pet-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  position: relative;
+  z-index: 1;
+  filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.35));
+  animation: petIdle 6s ease-in-out infinite;
+}
+
+.pet-container.dragging .pet-image,
+.pet-container.dragging .pet-image img {
+  animation-play-state: paused !important;
+  transition: none !important;
+}
+
+.pet-container.dragging .mini-info,
+.pet-container.dragging .pet-bubble {
+  display: none !important;
+}
+
+.pet-image.placeholder {
+  background: linear-gradient(135deg, #6c5ce7 0%, #5b4cdb 100%);
+  width: 110px;
+  height: 110px;
+  border-radius: 50%;
+  box-shadow: 0 8px 25px rgba(108, 92, 231, 0.4);
+  font-size: 60px;
+}
+
+.pet-image:hover {
+  transform: translateY(-1px) scale(1.025);
+  box-shadow: 0 10px 24px rgba(45, 52, 54, 0.24), 0 0 0 2px rgba(99, 102, 241, 0.24);
+}
+
+.pet-image:active {
+  transform: scale(0.985);
+}
+
+/* 点击涟漪 */
+.pet-image.ripple::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  background: rgba(108, 92, 231, 0.4);
+  transform: translate(-50%, -50%);
+  animation: ripple 0.6s ease-out;
+  pointer-events: none;
+  z-index: 10;
+}
+
+@keyframes ripple {
+  0% { width: 0; height: 0; opacity: 1; }
+  100% { width: 200px; height: 200px; opacity: 0; }
+}
+
+@keyframes petIdle {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+
+/* 闹钟提醒：短促摆动，避免透明小窗口中的大幅裁切 */
+@keyframes petShake {
+  0%, 100% { transform: rotate(0) scale(1); box-shadow: 0 8px 20px rgba(45, 52, 54, 0.2), 0 0 0 1px rgba(99, 102, 241, 0.16); }
+  15% { transform: rotate(-7deg) scale(1.025); box-shadow: 0 0 24px 4px rgba(255, 107, 107, 0.5); }
+  30% { transform: rotate(7deg) scale(1.025); }
+  45% { transform: rotate(-5deg) scale(1.02); }
+  60% { transform: rotate(5deg) scale(1.015); box-shadow: 0 0 18px 2px rgba(255, 107, 107, 0.35); }
+  78% { transform: rotate(-2deg) scale(1.005); }
+}
+
+.pet-image.alarm-shake {
+  animation: petShake 1.25s ease-out !important;
+}
+
+/* 闹钟感叹号 */
+.alarm-exclaim {
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  transform: translateX(-50%) scale(0);
+  width: 28px;
+  height: 28px;
+  background: #ff6b6b;
+  border-radius: 50%;
+  color: white;
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 28px;
+  text-align: center;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 20;
+  box-shadow: 0 2px 10px rgba(255, 107, 107, 0.5);
+}
+.alarm-exclaim.show {
+  animation: exclaimPop 1.8s ease-out forwards;
+}
+@keyframes exclaimPop {
+  0%   { transform: translateX(-50%) scale(0); opacity: 0; }
+  8%   { transform: translateX(-50%) scale(1.3); opacity: 1; }
+  15%  { transform: translateX(-50%) scale(1); opacity: 1; }
+  70%  { transform: translateX(-50%) scale(1); opacity: 1; }
+  100% { transform: translateX(-50%) scale(0.5); opacity: 0; }
+}
+
+/* 闹钟反应气泡 */
+.pet-bubble.alarm-bubble {
+  background: rgba(37, 37, 64, 0.94);
+  color: white;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 10px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  box-shadow: 0 10px 28px rgba(37, 37, 64, 0.34), 0 0 0 4px rgba(255, 255, 255, 0.08);
+}
+.pet-bubble.alarm-bubble::after {
+  border-color: transparent #ff6b6b transparent transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pet-container,
+  .pet-image,
+  .pet-image img {
+    animation: none !important;
+  }
+}
+
+/* 状态指示器 */
+.pet-status {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #51cf66;
+  border: 3px solid white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.pet-status.alarm-active {
+  background: #ff6b6b;
+  animation: blink 1s ease-in-out infinite;
+}
+.pet-status.scheduled {
+  background: #6c5ce7;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* 提示气泡 */
+.pet-bubble {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+  background: var(--pet-bubble-bg);
+  padding: 8px 14px;
+  border-radius: 18px;
+  font-size: 12px;
+  color: var(--pet-bubble-color);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+  white-space: nowrap;
+  display: none;
+  max-width: calc(100% - 28px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+  z-index: 45;
+}
+
+.pet-bubble::after {
+  display: none;
+}
+
+.pet-bubble.show {
+  display: block;
+  animation: bubbleIn 0.3s ease;
+}
+
+@keyframes bubbleIn {
+  from { opacity: 0; transform: translate(-50%, -6px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* 关闭按钮 */
+.pet-close {
+  position: absolute;
+  top: 76px;
+  left: calc(50% - 94px);
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #ff6b6b;
+  color: white;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 22px;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(255, 107, 107, 0.4);
+  opacity: 0;
+  transition: opacity 0.3s;
+  z-index: 999;
+}
+
+.pet-container:hover .pet-close {
+  opacity: 1;
+}
+
+.pet-close:hover {
+  background: #ee5a52;
+}
+
+/* 时间显示 */
+.pet-time {
+  margin-top: 8px;
+  position: relative;
+  z-index: 20;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--pet-time-color);
+  font-family: "Consolas", monospace;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  background: var(--pet-time-bg);
+  padding: 3px 10px;
+  border-radius: 10px;
+  transition: background 0.3s ease, color 0.3s ease;
+}
+
+
+/* 拖动提示 */
+.drag-hint {
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  color: #636e72;
+  opacity: 0.7;
+}
+
+/* 计时器弹窗 */
+.mini-info {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--mini-info-bg);
+  padding: 10px 15px;
+  border-radius: 12px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+  font-size: 12px;
+  color: var(--mini-info-color);
+  min-width: 220px;
+  max-width: calc(100% - 28px);
+  text-align: center;
+  display: none;
+  transition: background 0.3s ease, color 0.3s ease;
+  z-index: 40;
+}
+
+.mini-info.show {
+  display: block;
+  animation: bubbleIn 0.3s ease;
+}
+
+.mini-info-title {
+  font-size: 11px;
+  color: var(--mini-info-title-color);
+  margin-bottom: 5px;
+}
+
+.mini-info-time {
+  font-size: 16px;
+  font-weight: 700;
+  font-family: "Consolas", monospace;
+  white-space: nowrap;
+}
+
+.pet-error {
+  color: #ff6b6b;
+  padding: 20px;
+  font: 13px/1.5 "Microsoft YaHei", sans-serif;
+}

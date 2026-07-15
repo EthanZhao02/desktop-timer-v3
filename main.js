@@ -3,11 +3,13 @@
 const { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, screen, Notification, powerSaveBlocker, dialog, globalShortcut } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const { fileURLToPath } = require('url');
 const {
   DEFAULT_DATA,
   clampWindowPosition,
   collectDueAlarms,
   normalizeImportedData,
+  readJsonWithBackup,
   validateRingtone,
   writeJsonAtomic,
 } = require('./timer-core');
@@ -49,17 +51,28 @@ const DATA_FILE = path.join(USER_DATA, 'timer-data.json');
 const defaultData = DEFAULT_DATA;
 
 let data = { ...defaultData };
+let mainWindow = null;
+let petWindow = null;
+let tray = null;
+let alarmCheckInterval = null;
+let previousAlarmCheck = new Date();
+let isQuitting = false;
+let keepAliveId = null;
+const startupNotices = [];
+
+function addStartupNotice(type, message) {
+  const notice = { type, message };
+  startupNotices.push(notice);
+  broadcast('app-warning', notice);
+}
 
 function loadData() {
   try {
-    if (fs.existsSync(DATA_FILE)) {
-      let saved;
-      try {
-        saved = JSON.parse(fs.readFileSync(DATA_FILE, 'utf-8'));
-      } catch (primaryError) {
-        const backupFile = DATA_FILE + '.bak';
-        if (!fs.existsSync(backupFile)) throw primaryError;
-        saved = JSON.parse(fs.readFileSync(backupFile, 'utf-8'));
+    const result = readJsonWithBackup(DATA_FILE);
+    if (result.value) {
+      const saved = result.value;
+      if (result.restoredFromBackup) {
+        addStartupNotice('data-restored', '数据文件损坏，已从备份恢复。');
         safeError('Primary data file was invalid; restored the backup.');
       }
       data = {
@@ -71,8 +84,22 @@ function loadData() {
         },
         lastFired: saved.lastFired || {}
       };
+      const originalRingtone = data.customRingtone;
+      if (originalRingtone) {
+        data.customRingtone = normalizeCustomRingtone(originalRingtone, data.customRingtoneName);
+      }
+      if (originalRingtone && originalRingtone !== data.customRingtone) {
+        if (data.customRingtone) {
+          addStartupNotice('ringtone-migrated', '自定义铃声已迁移为本地文件，数据文件更轻了。');
+        } else {
+          data.customRingtoneName = '';
+          addStartupNotice('ringtone-removed', '自定义铃声路径无效，已恢复为默认铃声。');
+        }
+        saveData();
+      }
     }
   } catch (e) {
+    addStartupNotice('data-load-failed', '数据文件读取失败，已使用默认数据。');
     safeError('loadData error:', e);
   }
 }
@@ -87,20 +114,51 @@ function saveData() {
 
 loadData();
 
-let mainWindow = null;
-let petWindow = null;
-let tray = null;
-let alarmCheckInterval = null;
-let previousAlarmCheck = new Date();
-let isQuitting = false;
-let keepAliveId = null;
 let autoStartEnabled = data.settings.autoStartEnabled !== false;
 let keepAliveEnabled = data.settings.keepAliveEnabled !== false;
 const PET_WINDOW_WIDTH = 280;
 const PET_WINDOW_HEIGHT = 340;
+let petMouseEventsEnabled = true;
 
 function getDefaultRingtoneSrc() {
   return 'file:///' + path.join(__dirname, 'assets', 'default-ringtone.wav').replace(/\\/g, '/');
+}
+
+function fileUrlFromPath(filePath) {
+  return 'file:///' + filePath.replace(/\\/g, '/');
+}
+
+function saveRingtoneDataUrl(src, name) {
+  const safeSrc = validateRingtone(src);
+  if (!safeSrc || !safeSrc.startsWith('data:')) return safeSrc;
+
+  const mime = safeSrc.slice(5, safeSrc.indexOf(';')).toLowerCase();
+  const extension = mime.includes('mpeg') || /\.mp3$/i.test(name || '') ? 'mp3' : 'wav';
+  const directory = path.join(USER_DATA, 'ringtones');
+  const filePath = path.join(directory, `custom-ringtone.${extension}`);
+  const payload = safeSrc.slice(safeSrc.indexOf(',') + 1);
+
+  fs.mkdirSync(directory, { recursive: true });
+  fs.writeFileSync(filePath, Buffer.from(payload, 'base64'));
+  return fileUrlFromPath(filePath);
+}
+
+function isStoredRingtoneFileUrl(src) {
+  try {
+    const filePath = fileURLToPath(src);
+    const ringtoneDirectory = path.join(USER_DATA, 'ringtones');
+    const relative = path.relative(ringtoneDirectory, filePath);
+    return relative && !relative.startsWith('..') && !path.isAbsolute(relative) && /\.(wav|mp3)$/i.test(filePath);
+  } catch {
+    return false;
+  }
+}
+
+function normalizeCustomRingtone(src, name) {
+  const safeSrc = validateRingtone(src);
+  if (!safeSrc) return null;
+  if (safeSrc.startsWith('data:')) return saveRingtoneDataUrl(safeSrc, name);
+  return isStoredRingtoneFileUrl(safeSrc) ? safeSrc : null;
 }
 
 function getLoginItemPath() {
@@ -170,6 +228,7 @@ function createPetWindow() {
   const sw = display.workAreaSize.width;
   const sh = display.workAreaSize.height;
   safeLog('[main] createPetWindow called, screen=' + sw + 'x' + sh);
+  petMouseEventsEnabled = true;
 
   petWindow = new BrowserWindow({
     width: PET_WINDOW_WIDTH,
@@ -201,6 +260,7 @@ function createPetWindow() {
   petWindow.loadFile('pet.html');
   petWindow.once('ready-to-show', () => {
     petWindow.show();
+    setPetMouseEventsEnabled(false);
     safeLog('[main] pet window shown');
   });
   petWindow.webContents.on('did-fail-load', (e, code, desc) => {
@@ -224,6 +284,14 @@ function createPetWindow() {
       petWindow.hide();
     }
   });
+}
+
+function setPetMouseEventsEnabled(enabled) {
+  if (!petWindow || petWindow.isDestroyed()) return;
+  const next = enabled === true;
+  if (petMouseEventsEnabled === next) return;
+  petMouseEventsEnabled = next;
+  petWindow.setIgnoreMouseEvents(!next, { forward: true });
 }
 
 function buildTrayMenu() {
@@ -375,16 +443,18 @@ ipcMain.handle('get-ringtone', () => ({
 }));
 ipcMain.handle('set-ringtone', (e, ringtoneData) => {
   if (ringtoneData && typeof ringtoneData === 'object') {
-    data.customRingtone = validateRingtone(ringtoneData.src);
-    data.customRingtoneName = ringtoneData.name || '';
+    const normalized = normalizeCustomRingtone(ringtoneData.src, ringtoneData.name);
+    data.customRingtone = normalized;
+    data.customRingtoneName = normalized ? (ringtoneData.name || '') : '';
   } else {
-    data.customRingtone = ringtoneData || null;
+    data.customRingtone = normalizeCustomRingtone(ringtoneData);
     data.customRingtoneName = '';
   }
   saveData();
   return true;
 });
 ipcMain.handle('get-default-ringtone-path', () => getDefaultRingtoneSrc());
+ipcMain.handle('get-startup-notices', () => startupNotices.slice());
 ipcMain.handle('get-settings', () => ({
   autoStartEnabled,
   keepAliveEnabled,
@@ -427,6 +497,10 @@ ipcMain.handle('minimize-to-pet', () => {
   return true;
 });
 ipcMain.handle('quit-app', () => { isQuitting = true; app.quit(); });
+ipcMain.on('set-pet-mouse-events', (event, enabled) => {
+  if (!petWindow || petWindow.isDestroyed() || event.sender !== petWindow.webContents) return;
+  setPetMouseEventsEnabled(enabled === true);
+});
 ipcMain.on('move-pet-to', (event, x, y) => {
   if (!petWindow || petWindow.isDestroyed()) return;
   const targetX = Number(x);
@@ -473,6 +547,10 @@ ipcMain.handle('import-data', async () => {
     if (result.canceled || !result.filePaths || !result.filePaths[0]) return { success: false };
     const raw = fs.readFileSync(result.filePaths[0], 'utf-8');
     const imported = normalizeImportedData(JSON.parse(raw));
+    if (imported.customRingtone) {
+      imported.customRingtone = normalizeCustomRingtone(imported.customRingtone, imported.customRingtoneName);
+      if (!imported.customRingtone) imported.customRingtoneName = '';
+    }
     data = imported;
     autoStartEnabled = imported.settings.autoStartEnabled;
     keepAliveEnabled = imported.settings.keepAliveEnabled;
@@ -499,6 +577,7 @@ function applyAutoStart() {
     });
     safeLog('[main] auto-start set to ' + autoStartEnabled);
   } catch (e) {
+    addStartupNotice('auto-start-failed', '开机自启设置失败：' + e.message);
     safeError('[main] setLoginItemSettings failed:', e);
   }
 }

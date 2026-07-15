@@ -22,6 +22,7 @@ async function capture(file, width, height, output, options = {}) {
     if (event.level === 'warning' || event.level === 'error') errors.push(event.message);
   });
   await win.loadFile(path.join(__dirname, '..', file));
+  win.webContents.setZoomFactor(options.zoomFactor || 1);
   if (options.resetStorage !== false) {
     await win.webContents.executeJavaScript(`
       localStorage.removeItem('desktopTimerAlarms');
@@ -46,11 +47,14 @@ async function capture(file, width, height, output, options = {}) {
     clientHeight: document.documentElement.clientHeight,
     welcomeDisplay: document.getElementById('welcomeOverlay')?.style.display,
     settingsDisplay: getComputedStyle(document.getElementById('settingsOverlay') || document.body).display,
+    warningHidden: document.getElementById('warningPanel')?.classList.contains('is-hidden'),
+    warningText: document.getElementById('warningMessage')?.textContent,
     tabOpacity: document.getElementById('countdown') ? getComputedStyle(document.getElementById('countdown')).opacity : null,
     petBounds: document.getElementById('petContainer')?.getBoundingClientRect().toJSON(),
     bodyBackground: getComputedStyle(document.body).backgroundColor,
     petDragging: document.getElementById('petContainer')?.classList.contains('dragging'),
-    apiMoves: window.__apiMoves || []
+    apiMoves: window.__apiMoves || [],
+    petMouseModes: window.__petMouseModes || []
     ,functional: window.__functional || null
   })`);
   const image = await win.webContents.capturePage();
@@ -92,6 +96,26 @@ app.whenReady().then(async () => {
       })()`,
       wait: 50,
     }),
+    await capture('index.html', 440, 800, 'warning-data-ui.png', {
+      skipWelcome: true,
+      action: `(async () => {
+        while (!window._initComplete) await new Promise(resolve => setTimeout(resolve, 20));
+        window.dispatchEvent(new CustomEvent('app-warning', {
+          detail: { type: 'data-restored', message: '数据文件损坏，已从备份恢复。' }
+        }));
+      })()`,
+      wait: 80,
+    }),
+    await capture('index.html', 440, 800, 'warning-autostart-ui.png', {
+      skipWelcome: true,
+      action: `(async () => {
+        while (!window._initComplete) await new Promise(resolve => setTimeout(resolve, 20));
+        window.dispatchEvent(new CustomEvent('app-warning', {
+          detail: { type: 'auto-start-failed', message: '开机自启设置失败：权限不足' }
+        }));
+      })()`,
+      wait: 80,
+    }),
     await capture('pet.html', PET_WINDOW_WIDTH, PET_WINDOW_HEIGHT, 'pet-ui.png', { frame: false, transparent: true }),
     await capture('pet.html', PET_WINDOW_WIDTH, PET_WINDOW_HEIGHT, 'pet-next-alarm-ui.png', {
       frame: false,
@@ -100,7 +124,24 @@ app.whenReady().then(async () => {
         document.getElementById('nextAlarmTime').textContent = '04:30 (11小时35分后)';
         document.getElementById('miniInfo').className = 'mini-info show';
       `,
+      wait: 450,
+    }),
+    await capture('pet.html', PET_WINDOW_WIDTH, PET_WINDOW_HEIGHT, 'pet-click-through-ui.png', {
+      frame: false,
+      transparent: true,
+      action: `
+        window.__petMouseModes = [];
+        window.api = { setPetMouseEvents: (enabled) => window.__petMouseModes.push(enabled) };
+        document.dispatchEvent(new MouseEvent('mousemove', { clientX: 140, clientY: 180, bubbles: true }));
+        document.dispatchEvent(new MouseEvent('mousemove', { clientX: 4, clientY: 4, bubbles: true }));
+      `,
       wait: 50,
+    }),
+    await capture('pet.html', Math.round(PET_WINDOW_WIDTH * 1.25), Math.round(PET_WINDOW_HEIGHT * 1.25), 'pet-hidpi-ui.png', {
+      frame: false,
+      transparent: true,
+      zoomFactor: 1.25,
+      wait: 120,
     }),
     await capture('pet.html', PET_WINDOW_WIDTH, PET_WINDOW_HEIGHT, 'pet-drag-ui.png', {
       frame: false,
@@ -126,6 +167,21 @@ app.whenReady().then(async () => {
   ];
   const petResults = results.filter((result) => result.file === 'pet.html');
   for (const result of petResults) {
+    if (result.output === 'pet-hidpi-ui.png') {
+      const surfaceWidthDiff = Math.abs(result.metrics.petBounds.width - result.metrics.clientWidth);
+      const surfaceHeightDiff = Math.abs(result.metrics.petBounds.height - result.metrics.clientHeight);
+      if (
+        surfaceWidthDiff > 2 ||
+        surfaceHeightDiff > 2 ||
+        result.metrics.clientWidth < PET_WINDOW_WIDTH ||
+        result.metrics.clientHeight < PET_WINDOW_HEIGHT
+      ) {
+        throw new Error(
+          `Pet high-DPI surface does not match its viewport: surface=${result.metrics.petBounds.width}x${result.metrics.petBounds.height}, viewport=${result.metrics.clientWidth}x${result.metrics.clientHeight}`,
+        );
+      }
+      continue;
+    }
     const widthDiff = Math.abs(result.metrics.petBounds.width - PET_WINDOW_WIDTH);
     const heightDiff = Math.abs(result.metrics.petBounds.height - PET_WINDOW_HEIGHT);
     if (widthDiff > 2 || heightDiff > 2) {
@@ -141,9 +197,21 @@ app.whenReady().then(async () => {
   if (!dragResult || dragResult.metrics.apiMoves.length !== 1 || dragResult.metrics.petDragging) {
     throw new Error('Pet drag did not move once and release cleanly');
   }
+  const hitTestResult = results.find((result) => result.output === 'pet-click-through-ui.png');
+  if (!hitTestResult || hitTestResult.metrics.petMouseModes.join(',') !== 'true,false') {
+    throw new Error('Pet click-through hit testing did not toggle transparent and interactive areas');
+  }
   const functionalResult = results.find((result) => result.metrics.functional);
   if (!functionalResult || Object.values(functionalResult.metrics.functional).some((value) => value !== true)) {
     throw new Error('Main-window functional smoke test failed');
+  }
+  const dataWarning = results.find((result) => result.output === 'warning-data-ui.png');
+  if (!dataWarning || dataWarning.metrics.warningHidden || !dataWarning.metrics.warningText.includes('备份恢复')) {
+    throw new Error('Data recovery warning prompt did not render');
+  }
+  const autoStartWarning = results.find((result) => result.output === 'warning-autostart-ui.png');
+  if (!autoStartWarning || autoStartWarning.metrics.warningHidden || !autoStartWarning.metrics.warningText.includes('开机自启设置失败')) {
+    throw new Error('Auto-start failure warning prompt did not render');
   }
   const realErrors = results.flatMap((result) => result.errors).filter((message) =>
     !message.includes('Electron Security Warning')
