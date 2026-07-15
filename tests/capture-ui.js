@@ -52,7 +52,13 @@ async function capture(file, width, height, output, options = {}) {
     tabOpacity: document.getElementById('countdown') ? getComputedStyle(document.getElementById('countdown')).opacity : null,
     petBounds: document.getElementById('petContainer')?.getBoundingClientRect().toJSON(),
     bodyBackground: getComputedStyle(document.body).backgroundColor,
+    petControlsVisible: document.getElementById('petContainer')?.classList.contains('controls-visible'),
+    petCloseOpacity: getComputedStyle(document.getElementById('petClose') || document.body).opacity,
+    petClosePointerEvents: getComputedStyle(document.getElementById('petClose') || document.body).pointerEvents,
+    petCloseStates: window.__petCloseStates || [],
     petDragging: document.getElementById('petContainer')?.classList.contains('dragging'),
+    petClickedMain: window.__petClickedMain || 0,
+    petRippleActive: document.getElementById('petImage')?.classList.contains('ripple'),
     apiMoves: window.__apiMoves || [],
     petMouseModes: window.__petMouseModes || []
     ,functional: window.__functional || null
@@ -131,9 +137,22 @@ app.whenReady().then(async () => {
       transparent: true,
       action: `
         window.__petMouseModes = [];
+        window.__petCloseStates = [];
         window.api = { setPetMouseEvents: (enabled) => window.__petMouseModes.push(enabled) };
+        const pet = document.getElementById('petContainer');
+        const close = document.getElementById('petClose');
+        const snapshot = (label) => window.__petCloseStates.push({
+          label,
+          visible: pet.classList.contains('controls-visible'),
+          pointerEvents: getComputedStyle(close).pointerEvents,
+        });
+        snapshot('initial');
         document.dispatchEvent(new MouseEvent('mousemove', { clientX: 140, clientY: 180, bubbles: true }));
+        snapshot('pet');
+        document.dispatchEvent(new MouseEvent('mousemove', { clientX: 62, clientY: 180, bubbles: true }));
+        snapshot('near-transparent');
         document.dispatchEvent(new MouseEvent('mousemove', { clientX: 4, clientY: 4, bubbles: true }));
+        snapshot('corner');
       `,
       wait: 50,
     }),
@@ -152,11 +171,28 @@ app.whenReady().then(async () => {
         const pet = document.getElementById('petContainer');
         pet.setPointerCapture = () => {};
         pet.hasPointerCapture = () => false;
-        pet.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 7, button: 0, screenX: 100, screenY: 100, bubbles: true }));
-        pet.dispatchEvent(new PointerEvent('pointermove', { pointerId: 7, buttons: 1, screenX: 130, screenY: 125, bubbles: true }));
-        pet.dispatchEvent(new PointerEvent('pointerup', { pointerId: 7, button: 0, screenX: 130, screenY: 125, bubbles: true }));
+        pet.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 7, button: 0, clientX: 100, clientY: 100, screenX: 100, screenY: 100, bubbles: true }));
+        pet.dispatchEvent(new PointerEvent('pointermove', { pointerId: 7, buttons: 1, clientX: 130, clientY: 125, screenX: 130, screenY: 125, bubbles: true }));
+        pet.dispatchEvent(new PointerEvent('pointerup', { pointerId: 7, button: 0, clientX: 130, clientY: 125, screenX: 130, screenY: 125, bubbles: true }));
       `,
       wait: 50,
+    }),
+    await capture('pet.html', PET_WINDOW_WIDTH, PET_WINDOW_HEIGHT, 'pet-click-main-ui.png', {
+      frame: false,
+      transparent: true,
+      action: `
+        window.__petClickedMain = 0;
+        window.api = {
+          showMain: async () => { window.__petClickedMain += 1; },
+          setPetMouseEvents: () => {},
+        };
+        const target = document.elementFromPoint(140, 180);
+        if (target) {
+          target.dispatchEvent(new MouseEvent('mousemove', { clientX: 140, clientY: 180, bubbles: true }));
+          target.click();
+        }
+      `,
+      wait: 80,
     }),
     await capture('pet.html', PET_WINDOW_WIDTH, PET_WINDOW_HEIGHT, 'pet-alarm-ui.png', {
       frame: false,
@@ -197,9 +233,33 @@ app.whenReady().then(async () => {
   if (!dragResult || dragResult.metrics.apiMoves.length !== 1 || dragResult.metrics.petDragging) {
     throw new Error('Pet drag did not move once and release cleanly');
   }
+  if (dragResult.metrics.apiMoves[0][1] <= 0) {
+    throw new Error('Pet drag smoke test did not move the pet downward');
+  }
+  const petClickResult = results.find((result) => result.output === 'pet-click-main-ui.png');
+  if (!petClickResult || petClickResult.metrics.petClickedMain !== 1 || !petClickResult.metrics.petRippleActive) {
+    throw new Error('Pet click did not request the main window and show feedback');
+  }
+  const defaultPetResult = results.find((result) => result.output === 'pet-ui.png');
+  if (
+    !defaultPetResult ||
+    defaultPetResult.metrics.petControlsVisible ||
+    Number(defaultPetResult.metrics.petCloseOpacity) > 0.01 ||
+    defaultPetResult.metrics.petClosePointerEvents !== 'none'
+  ) {
+    throw new Error('Pet close button should be hidden until the visible pet is hovered');
+  }
   const hitTestResult = results.find((result) => result.output === 'pet-click-through-ui.png');
   if (!hitTestResult || hitTestResult.metrics.petMouseModes.join(',') !== 'true,false') {
     throw new Error('Pet click-through hit testing did not toggle transparent and interactive areas');
+  }
+  const closeStates = hitTestResult.metrics.petCloseStates;
+  if (
+    !closeStates ||
+    closeStates.map((state) => state.visible).join(',') !== 'false,true,false,false' ||
+    closeStates.map((state) => state.pointerEvents).join(',') !== 'none,auto,none,none'
+  ) {
+    throw new Error('Pet close button visibility did not follow the visible hover region');
   }
   const functionalResult = results.find((result) => result.metrics.functional);
   if (!functionalResult || Object.values(functionalResult.metrics.functional).some((value) => value !== true)) {

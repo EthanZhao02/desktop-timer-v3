@@ -17,6 +17,13 @@ try {
 
   // ==================== 透明窗口点击穿透 ====================
   var petMouseEventsEnabled = null;
+  var petControlsVisible = false;
+  var dragPointerId = null;
+  var dragStartScreenX = 0;
+  var dragStartScreenY = 0;
+  var dragWindowX = 0;
+  var dragWindowY = 0;
+  var imgDragMoved = false;
 
   function pointHitsElement(x, y, element, padding) {
     if (!element) return false;
@@ -31,14 +38,20 @@ try {
       y <= rect.bottom + pad;
   }
 
-  function shouldReceiveMouse(x, y) {
-    if (dragPointerId !== null) return true;
-    return pointHitsElement(x, y, petImage, 8) ||
-      pointHitsElement(x, y, petTime, 6) ||
-      pointHitsElement(x, y, petClose, 6) ||
-      pointHitsElement(x, y, miniInfo, 4) ||
-      pointHitsElement(x, y, petBubble, 4) ||
-      pointHitsElement(x, y, dragHint, 4);
+  function setPetControlsVisible(visible) {
+    var next = visible === true;
+    if (petControlsVisible === next) return;
+    petControlsVisible = next;
+    petContainer.classList.toggle("controls-visible", next);
+  }
+
+  function shouldShowPetControls(x, y) {
+    if (dragPointerId !== null) return false;
+    return pointHitsElement(x, y, petImage) ||
+      pointHitsElement(x, y, petTime) ||
+      (petControlsVisible && pointHitsElement(x, y, petClose)) ||
+      pointHitsElement(x, y, miniInfo) ||
+      pointHitsElement(x, y, petBubble);
   }
 
   function setPetMouseEvents(enabled) {
@@ -52,15 +65,21 @@ try {
 
   function updatePetMouseEvents(e) {
     if (!e) {
+      setPetControlsVisible(false);
       setPetMouseEvents(false);
       return;
     }
-    setPetMouseEvents(shouldReceiveMouse(e.clientX, e.clientY));
+    var controlsVisible = shouldShowPetControls(e.clientX, e.clientY);
+    setPetControlsVisible(controlsVisible);
+    setPetMouseEvents(controlsVisible || pointHitsElement(e.clientX, e.clientY, dragHint));
   }
 
   document.addEventListener("mousemove", updatePetMouseEvents);
   document.addEventListener("mouseleave", function() {
-    if (dragPointerId === null) setPetMouseEvents(false);
+    if (dragPointerId === null) {
+      setPetControlsVisible(false);
+      setPetMouseEvents(false);
+    }
   });
 
   // ==================== 时间显示 ====================
@@ -173,15 +192,27 @@ try {
   };
 
   // ==================== 拖动功能 ====================
-  var dragPointerId = null;
-  var dragStartScreenX = 0;
-  var dragStartScreenY = 0;
-  var dragWindowX = 0;
-  var dragWindowY = 0;
-  var imgDragMoved = false;
+  function isDragHandle(target) {
+    return target === petImage ||
+      petImage.contains(target) ||
+      target === petTime ||
+      petTime.contains(target) ||
+      target === miniInfo ||
+      miniInfo.contains(target) ||
+      target === petBubble ||
+      petBubble.contains(target) ||
+      target === dragHint;
+  }
+
+  function canStartDrag(e) {
+    if (e.target === petClose || petClose.contains(e.target)) return false;
+    return isDragHandle(e.target) ||
+      pointHitsElement(e.clientX, e.clientY, petImage) ||
+      pointHitsElement(e.clientX, e.clientY, petTime);
+  }
 
   petContainer.onpointerdown = function(e) {
-    if (e.button !== 0 || e.target === petClose) return;
+    if (e.button !== 0 || !canStartDrag(e)) return;
     dragPointerId = e.pointerId;
     dragStartScreenX = e.screenX;
     dragStartScreenY = e.screenY;
@@ -189,6 +220,7 @@ try {
     dragWindowY = window.screenY;
     imgDragMoved = false;
     setPetMouseEvents(true);
+    setPetControlsVisible(false);
     petContainer.setPointerCapture(e.pointerId);
     petContainer.classList.add("dragging");
     petContainer.style.cursor = "grabbing";
@@ -218,7 +250,7 @@ try {
     }
     dragPointerId = null;
     petContainer.classList.remove("dragging");
-    petContainer.style.cursor = "move";
+    petContainer.style.cursor = "default";
     setTimeout(function() {
       imgDragMoved = false;
       updatePetMouseEvents(e);

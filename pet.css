@@ -51,7 +51,7 @@ body.alarm-flash {
   width: 100vw;
   height: 100vh;
   overflow: visible;
-  cursor: move;
+  cursor: default;
   touch-action: none;
 }
 
@@ -64,6 +64,7 @@ body.alarm-flash {
   align-items: center;
   justify-content: flex-start;
   padding: 84px 0 24px;
+  pointer-events: none;
 }
 
 /* 宠物图片 */
@@ -81,6 +82,7 @@ body.alarm-flash {
   position: relative;
   overflow: hidden;
   box-shadow: 0 8px 20px rgba(45, 52, 54, 0.2), 0 0 0 1px rgba(99, 102, 241, 0.16);
+  pointer-events: auto;
 }
 
 .pet-image img {
@@ -100,6 +102,11 @@ body.alarm-flash {
   transition: none !important;
 }
 
+.pet-container.dragging .pet-image,
+.pet-container.dragging .pet-time {
+  cursor: grabbing;
+}
+
 .pet-container.dragging .mini-info,
 .pet-container.dragging .pet-bubble {
   display: none !important;
@@ -117,6 +124,7 @@ body.alarm-flash {
 .pet-image:hover {
   transform: translateY(-1px) scale(1.025);
   box-shadow: 0 10px 24px rgba(45, 52, 54, 0.24), 0 0 0 2px rgba(99, 102, 241, 0.24);
+  cursor: grab;
 }
 
 .pet-image:active {
@@ -262,6 +270,7 @@ body.alarm-flash {
   text-overflow: ellipsis;
   text-align: center;
   z-index: 45;
+  pointer-events: auto;
 }
 
 .pet-bubble::after {
@@ -295,12 +304,17 @@ body.alarm-flash {
   text-align: center;
   box-shadow: 0 2px 8px rgba(255, 107, 107, 0.4);
   opacity: 0;
-  transition: opacity 0.3s;
+  pointer-events: none;
+  transform: scale(0.92);
+  transition: opacity 0.18s ease, transform 0.18s ease, background 0.18s ease;
   z-index: 999;
 }
 
-.pet-container:hover .pet-close {
+.pet-container.controls-visible:not(.dragging) .pet-close,
+.pet-close:focus-visible {
   opacity: 1;
+  pointer-events: auto;
+  transform: scale(1);
 }
 
 .pet-close:hover {
@@ -321,6 +335,8 @@ body.alarm-flash {
   padding: 3px 10px;
   border-radius: 10px;
   transition: background 0.3s ease, color 0.3s ease;
+  cursor: grab;
+  pointer-events: auto;
 }
 
 
@@ -333,6 +349,7 @@ body.alarm-flash {
   font-size: 10px;
   color: #636e72;
   opacity: 0.7;
+  pointer-events: auto;
 }
 
 /* 计时器弹窗 */
@@ -353,6 +370,7 @@ body.alarm-flash {
   display: none;
   transition: background 0.3s ease, color 0.3s ease;
   z-index: 40;
+  pointer-events: auto;
 }
 
 .mini-info.show {
