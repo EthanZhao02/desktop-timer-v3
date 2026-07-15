@@ -1,0 +1,2210 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: file:; media-src 'self' data: file:; connect-src 'none'; object-src 'none'; base-uri 'none'">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>智域计时</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg-gradient-start: #e0e5ec;
+      --bg-gradient-end: #d1d9e6;
+      --surface: #e0e5ec;
+      --shadow-dark: #a3b1c6;
+      --shadow-light: #ffffff;
+      --text-primary: #2d3436;
+      --text-secondary: #636e72;
+      --accent: #6c5ce7;
+      --accent-dark: #5b4cdb;
+      --accent-glow: rgba(108, 92, 231, 0.4);
+      --accent-glow-strong: rgba(108, 92, 231, 0.5);
+      --danger: #ff6b6b;
+      --danger-dark: #ee5a52;
+      --success: #51cf66;
+      --lap-bg: rgba(255, 255, 255, 0.5);
+      --border-subtle: rgba(163, 177, 198, 0.3);
+      --welcome-card-start: #ffffff;
+      --welcome-card-end: #f5f6fa;
+      --welcome-tip-bg-start: #f0eefb;
+      --welcome-tip-bg-end: #f5f3fd;
+      --welcome-tip-text: #4a4a6a;
+      --welcome-dot: #d1d9e6;
+      --welcome-dot-active-start: #6c5ce7;
+      --welcome-dot-active-end: #a29bfe;
+      --welcome-btn-secondary-bg: #f0f0f5;
+      --welcome-btn-secondary-color: #636e72;
+      --welcome-btn-secondary-hover: #e6e6ef;
+      --welcome-skip: #b2bec3;
+    }
+
+    [data-theme="dark"] {
+      --bg-gradient-start: #1a1a2e;
+      --bg-gradient-end: #16213e;
+      --surface: #252540;
+      --shadow-dark: #151528;
+      --shadow-light: #353555;
+      --text-primary: #e0e0e0;
+      --text-secondary: #a0a0b0;
+      --accent: #a29bfe;
+      --accent-dark: #6c5ce7;
+      --accent-glow: rgba(162, 155, 254, 0.35);
+      --accent-glow-strong: rgba(162, 155, 254, 0.5);
+      --danger: #ff6b6b;
+      --danger-dark: #ee5a52;
+      --success: #51cf66;
+      --lap-bg: rgba(255, 255, 255, 0.08);
+      --border-subtle: rgba(100, 100, 140, 0.3);
+      --welcome-card-start: #252540;
+      --welcome-card-end: #1e1e36;
+      --welcome-tip-bg-start: #2a2a48;
+      --welcome-tip-bg-end: #252540;
+      --welcome-tip-text: #c0c0d0;
+      --welcome-dot: #353555;
+      --welcome-dot-active-start: #a29bfe;
+      --welcome-dot-active-end: #6c5ce7;
+      --welcome-btn-secondary-bg: #2a2a48;
+      --welcome-btn-secondary-color: #a0a0b0;
+      --welcome-btn-secondary-hover: #353555;
+      --welcome-skip: #606080;
+    }
+
+    body {
+      font-family: "Microsoft YaHei", "微软雅黑", "Segoe UI", sans-serif;
+      background: linear-gradient(135deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
+      min-height: 100vh;
+      user-select: none;
+      -webkit-user-select: none;
+      color: var(--text-primary);
+      transition: background 0.3s ease, color 0.3s ease;
+    }
+
+    .app-container {
+      max-width: 420px;
+      margin: 0 auto;
+      padding: 15px;
+      min-height: 100vh;
+    }
+
+    /* 头部 */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+    }
+    .header-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+    .header-btn {
+      padding: 8px 14px;
+      border: none;
+      border-radius: 10px;
+      background: var(--surface);
+      box-shadow: 3px 3px 6px var(--shadow-dark), -3px -3px 6px var(--shadow-light);
+      cursor: pointer;
+      font-size: 12px;
+      color: var(--text-primary);
+      font-family: inherit;
+      transition: all 0.2s ease;
+    }
+    .header-btn:active {
+      box-shadow: inset 3px 3px 6px var(--shadow-dark), inset -3px -3px 6px var(--shadow-light);
+    }
+
+    /* 日期显示 */
+    .date-display {
+      text-align: center;
+      padding: 25px 20px;
+      margin-bottom: 20px;
+      background: var(--surface);
+      border-radius: 20px;
+      box-shadow: 8px 8px 16px var(--shadow-dark), -8px -8px 16px var(--shadow-light);
+      transition: background 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .current-date {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 10px;
+    }
+
+    .current-time {
+      font-size: 42px;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: 3px;
+      text-shadow: 2px 2px 4px var(--shadow-dark);
+    }
+
+    /* 标签切换 */
+    .tab-container {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .tab-btn {
+      flex: 1;
+      padding: 12px;
+      border: none;
+      border-radius: 12px;
+      background: var(--surface);
+      box-shadow: 5px 5px 10px var(--shadow-dark), -5px -5px 10px var(--shadow-light);
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      transition: all 0.3s ease;
+      font-family: inherit;
+    }
+
+    .tab-btn:hover { color: var(--accent); transform: translateY(-2px); }
+    .tab-btn.active {
+      color: var(--accent);
+      box-shadow: inset 5px 5px 10px var(--shadow-dark), inset -5px -5px 10px var(--shadow-light);
+    }
+
+    /* 标签内容 */
+    .tab-content { display: none; }
+    .tab-content.active { display: block; animation: fadeIn 0.3s ease; }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* 按钮 */
+    .btn {
+      border: none;
+      border-radius: 12px;
+      background: var(--surface);
+      box-shadow: 5px 5px 10px var(--shadow-dark), -5px -5px 10px var(--shadow-light);
+      cursor: pointer;
+      padding: 12px 18px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+      transition: all 0.3s ease;
+      font-family: inherit;
+    }
+
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 7px 7px 14px var(--shadow-dark), -7px -7px 14px var(--shadow-light);
+    }
+
+    .btn:active, .btn:disabled {
+      transform: translateY(0);
+      box-shadow: inset 3px 3px 6px var(--shadow-dark), inset -3px -3px 6px var(--shadow-light);
+    }
+
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
+      color: white;
+      box-shadow: 5px 5px 15px var(--accent-glow), -5px -5px 15px var(--shadow-light);
+    }
+
+    .btn-primary:hover {
+      box-shadow: 7px 7px 20px var(--accent-glow-strong), -7px -7px 20px var(--shadow-light);
+    }
+
+    .btn-danger {
+      background: linear-gradient(135deg, var(--danger) 0%, var(--danger-dark) 100%);
+      color: white;
+    }
+
+    .btn-small {
+      padding: 6px 10px;
+      font-size: 12px;
+    }
+
+    /* 输入框 */
+    .input {
+      width: 100%;
+      padding: 14px 16px;
+      border: none;
+      border-radius: 12px;
+      background: var(--surface);
+      box-shadow: inset 5px 5px 10px var(--shadow-dark), inset -5px -5px 10px var(--shadow-light);
+      font-size: 14px;
+      color: var(--text-primary);
+      margin-bottom: 12px;
+      outline: none;
+      font-family: inherit;
+      transition: background 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .input:focus {
+      box-shadow: inset 3px 3px 6px var(--shadow-dark), inset -3px -3px 6px var(--shadow-light), 0 0 0 3px var(--accent);
+    }
+
+    .input::placeholder {
+      color: var(--text-secondary);
+      opacity: 0.7;
+    }
+
+    /* 倒计时 */
+    .countdown-display {
+      text-align: center;
+      padding: 30px 20px;
+      margin-bottom: 20px;
+    }
+
+    .countdown-value {
+      font-size: 36px;
+      font-weight: 700;
+      color: var(--accent);
+      font-family: "Consolas", "Courier New", monospace;
+      letter-spacing: 2px;
+      text-shadow: 2px 2px 4px var(--shadow-dark);
+    }
+
+    .countdown-label {
+      font-size: 16px;
+      color: var(--text-secondary);
+      margin-top: 10px;
+    }
+
+    .preset-buttons {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+
+    .custom-section {
+      padding: 15px;
+      background: var(--surface);
+      border-radius: 15px;
+      box-shadow: inset 3px 3px 6px var(--shadow-dark), inset -3px -3px 6px var(--shadow-light);
+      transition: background 0.3s ease;
+    }
+
+    /* 正计时 */
+    .timer-display { text-align: center; padding: 40px 20px; }
+    .timer-value {
+      font-size: 48px;
+      font-weight: 700;
+      color: var(--text-primary);
+      font-family: "Consolas", "Courier New", monospace;
+      letter-spacing: 2px;
+    }
+    .timer-ms {
+      font-size: 24px;
+      color: var(--accent);
+      font-weight: 600;
+      margin-top: 5px;
+    }
+
+    .timer-controls {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .btn-large { padding: 15px 30px; font-size: 16px; }
+
+    .lap-section {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 10px;
+    }
+
+    .lap-list {
+      max-height: 200px;
+      overflow-y: auto;
+      margin-top: 10px;
+      padding: 10px;
+      background: var(--surface);
+      border-radius: 12px;
+      box-shadow: inset 3px 3px 6px var(--shadow-dark), inset -3px -3px 6px var(--shadow-light);
+    }
+
+    .lap-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      border-radius: 8px;
+      background: var(--lap-bg);
+      font-size: 14px;
+      gap: 10px;
+    }
+
+    .lap-info { flex: 1; display: flex; justify-content: space-between; }
+    .lap-label { color: var(--text-secondary); }
+    .lap-time { color: var(--text-primary); font-weight: 600; font-family: "Consolas", monospace; }
+    .lap-delete {
+      background: none;
+      border: none;
+      color: var(--danger);
+      cursor: pointer;
+      font-size: 16px;
+      padding: 4px 8px;
+      border-radius: 6px;
+    }
+    .lap-delete:hover { background: rgba(255, 107, 107, 0.1); }
+
+    /* 闹钟 */
+    .alarm-setter {
+      padding: 15px;
+      background: var(--surface);
+      border-radius: 15px;
+      box-shadow: inset 3px 3px 6px var(--shadow-dark), inset -3px -3px 6px var(--shadow-light);
+      margin-bottom: 15px;
+      transition: background 0.3s ease;
+    }
+
+    .time-input { font-size: 20px; text-align: center; }
+
+    .checkbox-label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--text-primary);
+      font-size: 14px;
+      margin-bottom: 12px;
+      cursor: pointer;
+    }
+
+    .checkbox-label input { width: 20px; height: 20px; cursor: pointer; accent-color: var(--accent); }
+
+    .alarm-list { max-height: 220px; overflow-y: auto; }
+
+    .empty-tip {
+      text-align: center;
+      color: var(--text-secondary);
+      padding: 40px;
+      font-size: 14px;
+    }
+
+    .alarm-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 15px;
+      margin-bottom: 10px;
+      background: var(--surface);
+      border-radius: 12px;
+      box-shadow: 5px 5px 10px var(--shadow-dark), -5px -5px 10px var(--shadow-light);
+      transition: background 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .alarm-info { flex: 1; }
+    .alarm-time { font-size: 28px; font-weight: 700; color: var(--accent); }
+    .alarm-label-text { font-size: 13px; color: var(--text-secondary); margin-top: 3px; }
+
+    .alarm-actions { display: flex; align-items: center; gap: 12px; }
+
+    .alarm-toggle {
+      width: 52px;
+      height: 28px;
+      border-radius: 14px;
+      background: var(--shadow-dark);
+      position: relative;
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+
+    .alarm-toggle.active { background: var(--success); }
+
+    .alarm-toggle::after {
+      content: "";
+      position: absolute;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: white;
+      top: 2px;
+      left: 2px;
+      transition: transform 0.3s ease;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    }
+
+    .alarm-toggle.active::after { transform: translateX(24px); }
+
+    .delete-alarm {
+      background: none;
+      border: none;
+      color: var(--danger);
+      cursor: pointer;
+      font-size: 20px;
+      padding: 5px;
+    }
+
+    /* 铃声 */
+    .ringtone-section {
+      margin-top: 20px;
+      padding-top: 15px;
+      border-top: 1px solid var(--border-subtle);
+    }
+
+    .ringtone-options {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+    .ringtone-options label {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 13px;
+      color: var(--text-primary);
+      cursor: pointer;
+    }
+    .ringtone-options input[type="radio"] { cursor: pointer; accent-color: var(--accent); }
+
+    .ringtone-btn { width: 100%; margin-bottom: 10px; }
+    .ringtone-name { font-size: 12px; color: var(--text-secondary); text-align: center; }
+
+    .audio-control {
+      display: none;
+      margin-top: 10px;
+      padding: 10px;
+      background: var(--surface);
+      border-radius: 10px;
+      box-shadow: inset 3px 3px 6px var(--shadow-dark), inset -3px -3px 6px var(--shadow-light);
+      text-align: center;
+    }
+    .audio-control.show { display: block; }
+    .audio-control button {
+      margin: 0 5px;
+    }
+    .audio-control .status {
+      font-size: 12px;
+      color: var(--accent);
+      margin-bottom: 8px;
+    }
+
+    .settings-section {
+      margin-top: 18px;
+      padding-top: 15px;
+      border-top: 1px solid var(--border-subtle);
+    }
+    .settings-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+      color: var(--text-primary);
+      font-size: 13px;
+    }
+    .settings-row label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+    }
+    .settings-row input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--accent);
+    }
+    .settings-path {
+      margin-top: 6px;
+      color: var(--text-secondary);
+      font-size: 11px;
+      line-height: 1.5;
+      word-break: break-all;
+    }
+
+    /* 通知 */
+    .notification {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-100px);
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
+      color: white;
+      padding: 15px 25px;
+      border-radius: 12px;
+      box-shadow: 0 10px 30px var(--accent-glow);
+      z-index: 1000;
+      font-size: 16px;
+      font-weight: 600;
+      transition: transform 0.5s ease;
+    }
+
+    .notification.show { transform: translateX(-50%) translateY(0); }
+
+    /* 错误 */
+    .error-display {
+      position: fixed;
+      bottom: 10px;
+      left: 10px;
+      right: 10px;
+      background: var(--danger);
+      color: white;
+      padding: 10px 15px;
+      border-radius: 8px;
+      font-size: 12px;
+      display: none;
+      z-index: 1001;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.03); }
+    }
+    .pulse { animation: pulse 2s ease-in-out infinite; }
+
+    /* ===== 首次启动欢迎页 ===== */
+    .welcome-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.55);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      animation: welcomeFadeIn 0.4s ease-out;
+    }
+    @keyframes welcomeFadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    .welcome-card {
+      width: 100%;
+      max-width: 420px;
+      max-height: 90vh;
+      overflow-y: auto;
+      background: linear-gradient(135deg, var(--welcome-card-start) 0%, var(--welcome-card-end) 100%);
+      border-radius: 20px;
+      box-shadow: 0 20px 60px var(--accent-glow), 0 0 0 1px rgba(108, 92, 231, 0.1);
+      padding: 28px 24px;
+      animation: welcomeSlideIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    @keyframes welcomeSlideIn {
+      from { transform: translateY(30px) scale(0.95); opacity: 0; }
+      to { transform: translateY(0) scale(1); opacity: 1; }
+    }
+    .welcome-header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .welcome-logo {
+      width: 56px;
+      height: 56px;
+      border-radius: 16px;
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
+      color: white;
+      font-size: 28px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 12px;
+      box-shadow: 0 6px 20px var(--accent-glow);
+      letter-spacing: 0;
+    }
+    .welcome-title {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+    .welcome-subtitle {
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+    .welcome-step {
+      display: none;
+    }
+    .welcome-step.active {
+      display: block;
+      animation: stepIn 0.3s ease-out;
+    }
+    @keyframes stepIn {
+      from { opacity: 0; transform: translateX(10px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+    .welcome-step-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: var(--surface);
+      box-shadow: 3px 3px 6px var(--shadow-dark), -3px -3px 6px var(--shadow-light);
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 12px auto 8px;
+    }
+    .welcome-step-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+      text-align: center;
+      margin-bottom: 10px;
+    }
+    .welcome-step-desc {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.7;
+      margin-bottom: 12px;
+    }
+    .welcome-step-tip {
+      background: linear-gradient(135deg, var(--welcome-tip-bg-start) 0%, var(--welcome-tip-bg-end) 100%);
+      border-left: 3px solid var(--accent);
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      color: var(--welcome-tip-text);
+      line-height: 1.6;
+      margin: 10px 0;
+    }
+    .welcome-dots {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin: 18px 0 16px;
+    }
+    .welcome-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--welcome-dot);
+      transition: all 0.3s;
+    }
+    .welcome-dot.active {
+      width: 24px;
+      background: linear-gradient(90deg, var(--welcome-dot-active-start), var(--welcome-dot-active-end));
+      border-radius: 4px;
+    }
+    .welcome-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 4px;
+    }
+    .welcome-btn {
+      flex: 1;
+      padding: 11px;
+      border: none;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .welcome-btn-primary {
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
+      color: white;
+      box-shadow: 0 4px 12px var(--accent-glow);
+    }
+    .welcome-btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px var(--accent-glow-strong);
+    }
+    .welcome-btn-secondary {
+      background: var(--welcome-btn-secondary-bg);
+      color: var(--welcome-btn-secondary-color);
+    }
+    .welcome-btn-secondary:hover {
+      background: var(--welcome-btn-secondary-hover);
+    }
+    .welcome-skip {
+      text-align: center;
+      margin-top: 10px;
+      font-size: 12px;
+      color: var(--welcome-skip);
+      cursor: pointer;
+      user-select: none;
+    }
+    .welcome-skip:hover {
+      color: var(--accent);
+    }
+
+    /* ===== 主题切换按钮 ===== */
+    .theme-toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      font-size: 13px;
+      color: var(--text-primary);
+    }
+    .theme-switch {
+      width: 44px;
+      height: 24px;
+      border-radius: 12px;
+      background: var(--shadow-dark);
+      position: relative;
+      transition: background 0.3s ease;
+      flex-shrink: 0;
+    }
+    .theme-switch.active {
+      background: var(--accent);
+    }
+    .theme-switch::after {
+      content: "";
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: white;
+      top: 2px;
+      left: 2px;
+      transition: transform 0.3s ease;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    }
+    .theme-switch.active::after {
+      transform: translateX(20px);
+    }
+
+    /* ===== 设置弹窗 ===== */
+    .settings-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.45);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      z-index: 5000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .settings-overlay.show {
+      display: flex;
+      animation: welcomeFadeIn 0.25s ease-out;
+    }
+    .settings-modal {
+      width: 100%;
+      max-width: 400px;
+      max-height: 85vh;
+      overflow-y: auto;
+      background: linear-gradient(135deg, var(--welcome-card-start) 0%, var(--welcome-card-end) 100%);
+      border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      padding: 24px 20px;
+      animation: welcomeSlideIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .settings-modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    .settings-modal-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+    .settings-modal-close {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--surface);
+      box-shadow: 3px 3px 6px var(--shadow-dark), -3px -3px 6px var(--shadow-light);
+      border: none;
+      cursor: pointer;
+      font-size: 16px;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+    .settings-modal-close:hover {
+      color: var(--danger);
+    }
+    .settings-group {
+      margin-bottom: 18px;
+    }
+    .settings-group-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 10px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .settings-header-btn {
+      padding: 8px 10px;
+      border: none;
+      border-radius: 10px;
+      background: var(--surface);
+      box-shadow: 3px 3px 6px var(--shadow-dark), -3px -3px 6px var(--shadow-light);
+      cursor: pointer;
+      font-size: 16px;
+      color: var(--text-primary);
+      transition: all 0.2s ease;
+      line-height: 1;
+    }
+    .settings-header-btn:active {
+      box-shadow: inset 3px 3px 6px var(--shadow-dark), inset -3px -3px 6px var(--shadow-light);
+    }
+
+    /* 暗色模式下原生输入框适配 */
+    [data-theme="dark"] input[type="datetime-local"],
+    [data-theme="dark"] input[type="time"],
+    [data-theme="dark"] input[type="text"],
+    [data-theme="dark"] select {
+      color-scheme: dark;
+    }
+  </style>
+</head>
+<body>
+  <div class="notification" id="notification"></div>
+  <div class="error-display" id="errorDisplay"></div>
+
+  <!-- 首次启动欢迎页 -->
+  <div class="welcome-overlay" id="welcomeOverlay" style="display:none;">
+    <div class="welcome-card">
+      <div class="welcome-header">
+        <div class="welcome-logo">Z</div>
+        <div class="welcome-title">欢迎使用智域计时</div>
+        <div class="welcome-subtitle">30 秒快速上手</div>
+      </div>
+
+      <div class="welcome-step active" data-step="0">
+        <div class="welcome-step-icon">1</div>
+        <div class="welcome-step-title">设置铃声</div>
+        <div class="welcome-step-desc">
+          默认有一个内置铃声，但你可以用自己喜欢的。<br>
+          打开主窗口右上角齿轮图标进入 <b>设置</b> → <b>自定义铃声</b>，选个 <code>.wav</code> 或 <code>.mp3</code> 文件就行。
+        </div>
+        <div class="welcome-step-tip">
+          推荐用 5–30 秒的铃声，太长会很吵
+        </div>
+      </div>
+
+      <div class="welcome-step" data-step="1">
+        <div class="welcome-step-icon">2</div>
+        <div class="welcome-step-title">认识系统托盘</div>
+        <div class="welcome-step-desc">
+          屏幕右下角有个小图标（智域计时 logo），右键它可以看到菜单：<br>
+          · <b>打开计时器</b>：唤出主窗口<br>
+          · <b>显示/隐藏宠物</b>：切换宠物<br>
+          · <b>开机自启 / 熄屏保活</b>：按需勾选
+        </div>
+        <div class="welcome-step-tip">
+          关掉主窗口的 X 只是最小化到宠物，不会退出应用
+        </div>
+      </div>
+
+      <div class="welcome-step" data-step="2">
+        <div class="welcome-step-icon">3</div>
+        <div class="welcome-step-title">如何彻底退出</div>
+        <div class="welcome-step-desc">
+          三种方式都可以：<br>
+          · 右键托盘 → <b>退出</b>（推荐）<br>
+          · 主窗口 → <b>设置</b> → <b>退出应用</b><br>
+          · 任务管理器 → 结束 <b>智域计时</b> 进程
+        </div>
+        <div class="welcome-step-tip">
+          准备好了！开始使用吧。右键托盘可以随时再打开这个教学。
+        </div>
+      </div>
+
+      <div class="welcome-dots">
+        <div class="welcome-dot active" data-dot="0"></div>
+        <div class="welcome-dot" data-dot="1"></div>
+        <div class="welcome-dot" data-dot="2"></div>
+      </div>
+
+      <div class="welcome-actions">
+        <button class="welcome-btn welcome-btn-secondary" id="welcomePrev" style="display:none;">上一步</button>
+        <button class="welcome-btn welcome-btn-primary" id="welcomeNext">下一步 →</button>
+      </div>
+      <div class="welcome-skip" id="welcomeSkip">跳过教学</div>
+    </div>
+  </div>
+
+  <div class="app-container">
+    <div class="header">
+      <div class="header-title">智域计时</div>
+      <div style="display:flex;gap:8px;">
+        <button class="settings-header-btn" id="settingsBtn" title="设置">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
+        <button class="header-btn" id="minimizeBtn" title="最小化到宠物">收纳</button>
+      </div>
+    </div>
+
+    <div class="date-display">
+      <div class="current-date" id="currentDate">2026年7月12日</div>
+      <div class="current-time" id="currentTime">00:00:00</div>
+    </div>
+
+    <div class="tab-container">
+      <button class="tab-btn active" data-tab="countdown">倒计时</button>
+      <button class="tab-btn" data-tab="timer">正计时</button>
+      <button class="tab-btn" data-tab="alarm">闹钟</button>
+    </div>
+
+    <!-- 倒计时 -->
+    <div class="tab-content active" id="countdown">
+      <div class="countdown-display">
+        <div class="countdown-value" id="countdownDisplay">00:00:00</div>
+        <div class="countdown-label" id="countdownLabel">设置倒计时</div>
+      </div>
+
+      <div class="preset-buttons">
+        <button class="btn preset-btn" data-preset="kaoyan">考研</button>
+        <button class="btn preset-btn" data-preset="kaogong">考公</button>
+        <button class="btn preset-btn" data-preset="guonian">过年</button>
+        <button class="btn preset-btn" data-preset="shangban">上班</button>
+      </div>
+
+      <div class="custom-section">
+        <input type="datetime-local" class="input" id="customDate">
+        <input type="text" class="input" id="customLabel" placeholder="事件名称">
+        <button class="btn btn-primary" id="startCountdownBtn" style="width: 100%;">开始倒计时</button>
+      </div>
+    </div>
+
+    <!-- 正计时 -->
+    <div class="tab-content" id="timer">
+      <div class="timer-display">
+        <div class="timer-value" id="timerDisplay">00:00:00</div>
+        <div class="timer-ms" id="timerMs">.000</div>
+      </div>
+
+      <div class="timer-controls">
+        <button class="btn btn-large" id="startTimerBtn">开始</button>
+        <button class="btn" id="pauseTimerBtn" disabled>暂停</button>
+        <button class="btn" id="resetTimerBtn">重置</button>
+      </div>
+
+      <div>
+        <div class="lap-section">
+          <button class="btn" id="lapBtn" disabled>计次</button>
+          <button class="btn btn-small" id="clearLapsBtn" style="display:none;">清空</button>
+        </div>
+        <div class="lap-list" id="lapList"></div>
+      </div>
+    </div>
+
+    <!-- 闹钟 -->
+    <div class="tab-content" id="alarm">
+      <div class="alarm-setter">
+        <input type="time" class="input time-input" id="alarmTime">
+        <input type="text" class="input" id="alarmLabel" placeholder="闹钟备注">
+        <label class="checkbox-label">
+          <input type="checkbox" id="repeatDaily">
+          每天重复
+        </label>
+        <button class="btn btn-primary" id="addAlarmBtn" style="width: 100%;">添加闹钟</button>
+      </div>
+
+      <div class="alarm-list" id="alarmList">
+        <div class="empty-tip">暂无闹钟</div>
+      </div>
+    </div>
+
+    <!-- 设置弹窗 -->
+    <div class="settings-overlay" id="settingsOverlay">
+      <div class="settings-modal">
+        <div class="settings-modal-header">
+          <div class="settings-modal-title">设置</div>
+          <button class="settings-modal-close" id="settingsCloseBtn">✕</button>
+        </div>
+
+        <!-- 外观 -->
+        <div class="settings-group">
+          <div class="settings-group-title">外观</div>
+          <div class="settings-row">
+            <div class="theme-toggle" id="themeToggle">
+              <span>暗色模式</span>
+              <div class="theme-switch" id="themeSwitch"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 铃声 -->
+        <div class="settings-group">
+          <div class="settings-group-title">铃声</div>
+          <div class="ringtone-options">
+            <label><input type="radio" name="playMode" value="full" checked> 完整播放</label>
+            <label><input type="radio" name="playMode" value="30s"> 30秒</label>
+            <label><input type="radio" name="playMode" value="60s"> 1分钟</label>
+            <label><input type="radio" name="playMode" value="manual"> 手动停止</label>
+          </div>
+          <button class="btn ringtone-btn" id="selectRingtoneBtn">选择自定义铃声</button>
+          <div class="ringtone-name" id="ringtoneName">默认铃声（提示音）</div>
+          <input type="file" id="ringtoneFile" accept=".wav,.mp3,audio/wav,audio/mpeg" style="display: none;">
+          <div class="audio-control" id="audioControl">
+            <div class="status" id="audioStatus">正在播放...</div>
+            <button class="btn btn-small btn-danger" id="stopAudioBtn">停止</button>
+          </div>
+        </div>
+
+        <!-- 系统 -->
+        <div class="settings-group">
+          <div class="settings-group-title">系统</div>
+          <div class="settings-row">
+            <label><input type="checkbox" id="autoStartSetting"> 开机自启</label>
+            <label><input type="checkbox" id="keepAliveSetting"> 熄屏保活</label>
+          </div>
+        </div>
+
+        <!-- 数据 -->
+        <div class="settings-group">
+          <div class="settings-group-title">数据管理</div>
+          <div class="settings-row" style="gap: 8px;">
+            <button class="btn btn-small" id="exportDataBtn" style="flex:1;">导出数据</button>
+            <button class="btn btn-small" id="importDataBtn" style="flex:1;">导入数据</button>
+          </div>
+          <div class="settings-path" id="dataPathInfo"></div>
+        </div>
+
+        <!-- 退出 -->
+        <button class="btn btn-danger" id="quitAppBtn" style="width: 100%;">退出应用</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function showError(msg) {
+      var errEl = document.getElementById("errorDisplay");
+      if (errEl) {
+        errEl.textContent = "错误: " + msg;
+        errEl.style.display = "block";
+        console.error(msg);
+      }
+    }
+
+    // ==================== 欢迎页逻辑 ====================
+    (function setupWelcome() {
+      var overlay = document.getElementById("welcomeOverlay");
+      if (!overlay) return;
+
+      var WELCOME_KEY = "zhiyu-welcomed-v1";
+      // 首次启动才弹（用 localStorage 标记）
+      try {
+        if (localStorage.getItem(WELCOME_KEY) === "1") return;
+      } catch (e) {}
+
+      // 延迟一点弹，等主窗口动画结束
+      setTimeout(function() {
+        overlay.style.display = "flex";
+      }, 600);
+
+      var step = 0;
+      var steps = overlay.querySelectorAll(".welcome-step");
+      var dots = overlay.querySelectorAll(".welcome-dot");
+      var btnNext = document.getElementById("welcomeNext");
+      var btnPrev = document.getElementById("welcomePrev");
+      var btnSkip = document.getElementById("welcomeSkip");
+
+      function render() {
+        for (var i = 0; i < steps.length; i++) {
+          steps[i].className = (i === step) ? "welcome-step active" : "welcome-step";
+        }
+        for (var i = 0; i < dots.length; i++) {
+          dots[i].className = (i === step) ? "welcome-dot active" : "welcome-dot";
+        }
+        btnPrev.style.display = (step === 0) ? "none" : "block";
+        btnNext.textContent = (step === steps.length - 1) ? "开始使用" : "下一步 →";
+      }
+
+      function close(persist) {
+        overlay.style.display = "none";
+        if (persist) {
+          try { localStorage.setItem(WELCOME_KEY, "1"); } catch (e) {}
+        }
+      }
+
+      btnNext.onclick = function() {
+        if (step < steps.length - 1) {
+          step++;
+          render();
+        } else {
+          close(true);
+        }
+      };
+      btnPrev.onclick = function() {
+        if (step > 0) { step--; render(); }
+      };
+      btnSkip.onclick = function() { close(true); };
+
+      // ESC 也关闭
+      document.addEventListener("keydown", function(e) {
+        if (overlay.style.display !== "none" && e.key === "Escape") {
+          close(true);
+        }
+      });
+    })();
+
+    window.onerror = function(msg, url, line, col, error) {
+      showError(msg + " (行 " + line + ")");
+      return false;
+    };
+
+    try {
+      // ==================== 全局变量 ====================
+      var countdownInterval = null;
+      var timerInterval = null;
+      var timerStartTime = 0;
+      var timerElapsed = 0;
+      var timerRunning = false;
+      var lapCount = 0;
+      var laps = [];  // 计次数据
+      var alarms = [];
+      var currentAudio = null;  // 当前播放的音频
+      var customRingtoneData = null;
+      var customRingtoneName = "";
+      var defaultRingtoneSrc = null;
+
+      // ==================== DOM 元素 ====================
+      var el = {
+        currentDate: document.getElementById("currentDate"),
+        currentTime: document.getElementById("currentTime"),
+        countdownDisplay: document.getElementById("countdownDisplay"),
+        countdownLabel: document.getElementById("countdownLabel"),
+        timerDisplay: document.getElementById("timerDisplay"),
+        timerMs: document.getElementById("timerMs"),
+        alarmList: document.getElementById("alarmList"),
+        lapList: document.getElementById("lapList"),
+        notification: document.getElementById("notification"),
+        ringtoneName: document.getElementById("ringtoneName"),
+        audioControl: document.getElementById("audioControl"),
+        audioStatus: document.getElementById("audioStatus"),
+        clearLapsBtn: document.getElementById("clearLapsBtn"),
+        autoStartSetting: document.getElementById("autoStartSetting"),
+        keepAliveSetting: document.getElementById("keepAliveSetting"),
+        quitAppBtn: document.getElementById("quitAppBtn"),
+        dataPathInfo: document.getElementById("dataPathInfo")
+      };
+
+      // ==================== 工具函数 ====================
+      function pad(n) {
+        return n < 10 ? "0" + n : "" + n;
+      }
+
+      function showNotification(msg) {
+        el.notification.textContent = msg;
+        el.notification.className = "notification show";
+        setTimeout(function() {
+          el.notification.className = "notification";
+        }, 2500);
+      }
+
+      function readLocalJson(key, fallback) {
+        try {
+          var saved = localStorage.getItem(key);
+          return saved ? JSON.parse(saved) : fallback;
+        } catch (e) {
+          return fallback;
+        }
+      }
+
+      function getLocalString(key) {
+        try {
+          return localStorage.getItem(key) || "";
+        } catch (e) {
+          return "";
+        }
+      }
+
+      async function loadSavedData() {
+        var localAlarms = readLocalJson("desktopTimerAlarms", []);
+        var localLaps = readLocalJson("desktopTimerLaps", []);
+        var localRingtone = getLocalString("customRingtone");
+        var localRingtoneName = getLocalString("customRingtoneName");
+        var migrationDone = getLocalString("zhiyu-json-migration-v1") === "1";
+
+        if (window.api && window.api.getAlarms) {
+          var savedAlarms = await window.api.getAlarms();
+          alarms = Array.isArray(savedAlarms) ? savedAlarms : [];
+          if (!migrationDone && alarms.length === 0 && localAlarms.length > 0) {
+            alarms = localAlarms;
+            await window.api.setAlarms(localAlarms);
+          }
+        } else {
+          alarms = localAlarms;
+        }
+
+        if (window.api && window.api.getLaps) {
+          var savedLaps = await window.api.getLaps();
+          laps = Array.isArray(savedLaps) ? savedLaps : [];
+          if (!migrationDone && laps.length === 0 && localLaps.length > 0) {
+            laps = localLaps;
+            await window.api.setLaps(localLaps);
+          }
+        } else {
+          laps = localLaps;
+        }
+        lapCount = laps.length;
+
+        if (window.api && window.api.getRingtone) {
+          var savedRingtone = await window.api.getRingtone();
+          customRingtoneData = savedRingtone && savedRingtone.src ? savedRingtone.src : null;
+          customRingtoneName = savedRingtone && savedRingtone.name ? savedRingtone.name : "";
+          if (!migrationDone && !customRingtoneData && localRingtone) {
+            customRingtoneData = localRingtone;
+            customRingtoneName = localRingtoneName;
+            await window.api.setRingtone({ src: localRingtone, name: localRingtoneName });
+          }
+        } else {
+          customRingtoneData = localRingtone;
+          customRingtoneName = localRingtoneName;
+        }
+
+        if (window.api && window.api.getDefaultRingtonePath) {
+          defaultRingtoneSrc = await window.api.getDefaultRingtonePath();
+        }
+        if (window.api && !migrationDone) {
+          try {
+            localStorage.removeItem("desktopTimerAlarms");
+            localStorage.removeItem("desktopTimerLaps");
+            localStorage.removeItem("customRingtone");
+            localStorage.removeItem("customRingtoneName");
+            localStorage.setItem("zhiyu-json-migration-v1", "1");
+          } catch (e) {}
+        }
+      }
+
+      function notifySystem(title, body) {
+        if (window.api && window.api.showNotification) {
+          window.api.showNotification({ title: title, body: body });
+        }
+      }
+
+      // ==================== 时钟 ====================
+      function updateDateTime() {
+        var now = new Date();
+        var weekdays = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
+        el.currentDate.textContent = now.getFullYear() + "年" + (now.getMonth() + 1) + "月" + now.getDate() + "日 " + weekdays[now.getDay()];
+        el.currentTime.textContent = pad(now.getHours()) + ":" + pad(now.getMinutes()) + ":" + pad(now.getSeconds());
+      }
+
+      // ==================== 标签切换 ====================
+      function setupTabs() {
+        var btns = document.querySelectorAll(".tab-btn");
+        for (var i = 0; i < btns.length; i++) {
+          btns[i].onclick = (function(btn) {
+            return function() {
+              var tabId = btn.getAttribute("data-tab");
+              var allBtns = document.querySelectorAll(".tab-btn");
+              for (var j = 0; j < allBtns.length; j++) allBtns[j].className = "tab-btn";
+              var allContents = document.querySelectorAll(".tab-content");
+              for (var j = 0; j < allContents.length; j++) allContents[j].className = "tab-content";
+              btn.className = "tab-btn active";
+              document.getElementById(tabId).className = "tab-content active";
+            };
+          })(btns[i]);
+        }
+      }
+
+      // 供主进程托盘「新建闹钟」远程切换标签
+      window.activateTabById = function(tabId) {
+        var target = document.querySelector('.tab-btn[data-tab="' + tabId + '"]');
+        if (!target) return;
+        var allBtns = document.querySelectorAll(".tab-btn");
+        for (var j = 0; j < allBtns.length; j++) allBtns[j].className = "tab-btn";
+        var allContents = document.querySelectorAll(".tab-content");
+        for (var j = 0; j < allContents.length; j++) allContents[j].className = "tab-content";
+        target.className = "tab-btn active";
+        document.getElementById(tabId).className = "tab-content active";
+      };
+
+      if (window.api && window.api.onSwitchTab) {
+        window.api.onSwitchTab(function(tab) { window.activateTabById(tab); });
+      }
+
+      // ==================== 倒计时 ====================
+      function startCountdown(targetDate, label) {
+        if (countdownInterval) clearInterval(countdownInterval);
+        el.countdownLabel.textContent = "距离 " + label + " 还有";
+        el.countdownLabel.className = "countdown-label pulse";
+        el.countdownDisplay.className = "countdown-value pulse";
+
+        // 持久化倒计时状态
+        if (window.api && window.api.setCountdown) {
+          window.api.setCountdown({ targetDate: targetDate.toISOString(), label: label });
+        }
+
+        countdownInterval = setInterval(function() {
+          var now = new Date();
+          var diff = targetDate.getTime() - now.getTime();
+
+          if (diff <= 0) {
+            clearInterval(countdownInterval);
+            el.countdownDisplay.textContent = "时间到！";
+            el.countdownLabel.textContent = label;
+            el.countdownLabel.className = "countdown-label";
+            el.countdownDisplay.className = "countdown-value";
+            playRingtone();
+            showNotification(label + " 到了！");
+            notifySystem("倒计时提醒", label + " 到了！");
+            // 清除已过期倒计时
+            if (window.api && window.api.setCountdown) {
+              window.api.setCountdown(null);
+            }
+            return;
+          }
+
+          var days = Math.floor(diff / (1000 * 60 * 60 * 24));
+          var hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+          var minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+          var seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+          if (days > 0) {
+            el.countdownDisplay.textContent = days + "天 " + pad(hours) + ":" + pad(minutes) + ":" + pad(seconds);
+          } else {
+            el.countdownDisplay.textContent = pad(hours) + ":" + pad(minutes) + ":" + pad(seconds);
+          }
+        }, 1000);
+      }
+
+      function getNextLunarNewYear(now) {
+        var dates = {
+          2026: [1, 17],
+          2027: [1, 6],
+          2028: [0, 26],
+          2029: [1, 13],
+          2030: [1, 3],
+          2031: [0, 23],
+          2032: [1, 11],
+          2033: [0, 31],
+          2034: [1, 19],
+          2035: [1, 8],
+          2036: [0, 28]
+        };
+        for (var y = now.getFullYear(); y <= 2036; y++) {
+          if (!dates[y]) continue;
+          var target = new Date(y, dates[y][0], dates[y][1], 0, 0, 0);
+          if (target > now) return target;
+        }
+        return null;
+      }
+
+      function setupPresets() {
+        var presets = document.querySelectorAll(".preset-btn");
+        for (var i = 0; i < presets.length; i++) {
+          presets[i].onclick = (function(btn) {
+            return function() {
+              var type = btn.getAttribute("data-preset");
+              var now = new Date();
+              var year = now.getFullYear();
+              var target, label;
+
+              if (type === "kaoyan") {
+                target = new Date(year, 11, 21, 0, 0, 0);
+                if (target < now) target = new Date(year + 1, 11, 21, 0, 0, 0);
+                label = "考研";
+              } else if (type === "kaogong") {
+                target = new Date(year, 0, 15, 0, 0, 0);
+                if (target < now) target = new Date(year + 1, 0, 15, 0, 0, 0);
+                label = "考公";
+              } else if (type === "guonian") {
+                target = getNextLunarNewYear(now);
+                if (!target) {
+                  showNotification("请用自定义日期设置春节倒计时");
+                  return;
+                }
+                label = "过年";
+              } else if (type === "shangban") {
+                target = new Date(year, now.getMonth(), now.getDate(), 9, 0, 0);
+                if (target < now) target.setDate(target.getDate() + 1);
+                label = "上班";
+              }
+
+              if (target) startCountdown(target, label);
+            };
+          })(presets[i]);
+        }
+
+        document.getElementById("startCountdownBtn").onclick = function() {
+          var dateInput = document.getElementById("customDate").value;
+          var label = document.getElementById("customLabel").value || "自定义事件";
+
+          if (!dateInput) {
+            showNotification("请先选择日期和时间");
+            return;
+          }
+
+          var target = new Date(dateInput);
+          if (target < new Date()) {
+            showNotification("请选择未来的时间");
+            return;
+          }
+
+          startCountdown(target, label);
+        };
+      }
+
+      // ==================== 正计时 ====================
+      function updateTimer() {
+        timerElapsed = Date.now() - timerStartTime;
+        var totalSeconds = Math.floor(timerElapsed / 1000);
+        var hours = Math.floor(totalSeconds / 3600);
+        var minutes = Math.floor((totalSeconds % 3600) / 60);
+        var seconds = totalSeconds % 60;
+        var ms = timerElapsed % 1000;
+        el.timerDisplay.textContent = pad(hours) + ":" + pad(minutes) + ":" + pad(seconds);
+        el.timerMs.textContent = "." + ("00" + ms).slice(-3);
+      }
+
+      function saveLaps() {
+        try {
+          if (window.api && window.api.setLaps) window.api.setLaps(laps);
+          else localStorage.setItem("desktopTimerLaps", JSON.stringify(laps));
+        } catch (e) {
+          showNotification("保存失败：计次数据可能太多");
+        }
+      }
+
+      function renderLaps() {
+        if (laps.length === 0) {
+          el.lapList.innerHTML = "";
+          el.clearLapsBtn.style.display = "none";
+          return;
+        }
+        var html = "";
+        for (var i = laps.length - 1; i >= 0; i--) {
+          var lap = laps[i];
+          html += "<div class=\"lap-item\">";
+          html += "  <div class=\"lap-info\">";
+          html += "    <span class=\"lap-label\">计次 " + Number(lap.index) + "</span>";
+          html += "    <span class=\"lap-time\">" + escapeHtml(lap.time) + "</span>";
+          html += "  </div>";
+          html += "  <button class=\"lap-delete\" data-index=\"" + i + "\" title=\"删除此计次\">✕</button>";
+          html += "</div>";
+        }
+        el.lapList.innerHTML = html;
+        el.clearLapsBtn.style.display = "inline-block";
+
+        var deletes = el.lapList.querySelectorAll(".lap-delete");
+        for (var j = 0; j < deletes.length; j++) {
+          deletes[j].onclick = (function(d) {
+            return function() {
+              var idx = parseInt(d.getAttribute("data-index"));
+              deleteLap(idx);
+            };
+          })(deletes[j]);
+        }
+      }
+
+      function deleteLap(index) {
+        laps.splice(index, 1);
+        // 重新编号
+        for (var i = 0; i < laps.length; i++) {
+          laps[i].index = i + 1;
+        }
+        lapCount = laps.length;
+        saveLaps();
+        renderLaps();
+        showNotification("已删除该计次");
+      }
+
+      function clearAllLaps() {
+        if (laps.length === 0) return;
+        if (!confirm("确定清空所有计次吗？")) return;
+        laps = [];
+        lapCount = 0;
+        saveLaps();
+        renderLaps();
+        showNotification("已清空所有计次");
+      }
+
+      function setupTimer() {
+        var startBtn = document.getElementById("startTimerBtn");
+        var pauseBtn = document.getElementById("pauseTimerBtn");
+        var resetBtn = document.getElementById("resetTimerBtn");
+        var lapBtn = document.getElementById("lapBtn");
+
+        startBtn.onclick = function() {
+          if (!timerRunning) {
+            timerStartTime = Date.now() - timerElapsed;
+            timerInterval = setInterval(updateTimer, 10);
+            timerRunning = true;
+            startBtn.textContent = "运行中";
+            startBtn.disabled = true;
+            pauseBtn.disabled = false;
+            lapBtn.disabled = false;
+            if (window.api && window.api.setStopwatch) {
+              window.api.setStopwatch({ elapsed: timerElapsed, running: true, startTime: timerStartTime });
+            }
+          }
+        };
+
+        pauseBtn.onclick = function() {
+          if (timerRunning) {
+            clearInterval(timerInterval);
+            timerRunning = false;
+            startBtn.textContent = "继续";
+            startBtn.disabled = false;
+            pauseBtn.disabled = true;
+            if (window.api && window.api.setStopwatch) {
+              window.api.setStopwatch({ elapsed: timerElapsed, running: false });
+            }
+          }
+        };
+
+        resetBtn.onclick = function() {
+          clearInterval(timerInterval);
+          timerRunning = false;
+          timerElapsed = 0;
+          el.timerDisplay.textContent = "00:00:00";
+          el.timerMs.textContent = ".000";
+          startBtn.textContent = "开始";
+          startBtn.disabled = false;
+          pauseBtn.disabled = true;
+          lapBtn.disabled = true;
+          if (window.api && window.api.setStopwatch) {
+            window.api.setStopwatch(null);
+          }
+        };
+
+        lapBtn.onclick = function() {
+          if (timerRunning) {
+            if (laps.length >= 99) {
+              showNotification("最多支持 99 圈计次");
+              return;
+            }
+            lapCount++;
+            var lapTime = el.timerDisplay.textContent + el.timerMs.textContent;
+            laps.push({
+              index: lapCount,
+              time: lapTime,
+              timestamp: Date.now()
+            });
+            saveLaps();
+            renderLaps();
+          }
+        };
+
+        el.clearLapsBtn.onclick = clearAllLaps;
+      }
+
+      // ==================== 闹钟 ====================
+      function saveAlarms() {
+        try {
+          if (window.api && window.api.setAlarms) window.api.setAlarms(alarms);
+          else localStorage.setItem("desktopTimerAlarms", JSON.stringify(alarms));
+        } catch (e) {}
+      }
+
+      function renderAlarms() {
+        if (alarms.length === 0) {
+          el.alarmList.innerHTML = "<div class=\"empty-tip\">暂无闹钟，点击上方添加</div>";
+          return;
+        }
+        var html = "";
+        for (var i = 0; i < alarms.length; i++) {
+          var a = alarms[i];
+          html += "<div class=\"alarm-item\">";
+          html += "  <div class=\"alarm-info\">";
+          html += "    <div class=\"alarm-time\">" + escapeHtml(a.time) + "</div>";
+          html += "    <div class=\"alarm-label-text\">" + escapeHtml(a.label) + (a.repeat ? " · 每天" : "") + "</div>";
+          html += "  </div>";
+          html += "  <div class=\"alarm-actions\">";
+          html += "    <div class=\"alarm-toggle " + (a.enabled ? "active" : "") + "\" data-id=\"" + Number(a.id) + "\" data-action=\"toggle\"></div>";
+          html += "    <button class=\"delete-alarm\" data-id=\"" + Number(a.id) + "\" data-action=\"delete\">✕</button>";
+          html += "  </div>";
+          html += "</div>";
+        }
+        el.alarmList.innerHTML = html;
+
+        var toggles = el.alarmList.querySelectorAll("[data-action='toggle']");
+        for (var j = 0; j < toggles.length; j++) {
+          toggles[j].onclick = (function(t) {
+            return function() {
+              var id = parseInt(t.getAttribute("data-id"));
+              toggleAlarm(id);
+            };
+          })(toggles[j]);
+        }
+        var deletes = el.alarmList.querySelectorAll("[data-action='delete']");
+        for (var j = 0; j < deletes.length; j++) {
+          deletes[j].onclick = (function(d) {
+            return function() {
+              var id = parseInt(d.getAttribute("data-id"));
+              deleteAlarm(id);
+            };
+          })(deletes[j]);
+        }
+      }
+
+      function escapeHtml(str) {
+        if (!str) return "";
+        return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+      }
+
+      function toggleAlarm(id) {
+        for (var i = 0; i < alarms.length; i++) {
+          if (alarms[i].id === id) {
+            alarms[i].enabled = !alarms[i].enabled;
+            alarms[i].triggered = false;
+            break;
+          }
+        }
+        saveAlarms();
+        renderAlarms();
+      }
+
+      function deleteAlarm(id) {
+        var newAlarms = [];
+        for (var i = 0; i < alarms.length; i++) {
+          if (alarms[i].id !== id) newAlarms.push(alarms[i]);
+        }
+        alarms = newAlarms;
+        saveAlarms();
+        renderAlarms();
+        showNotification("闹钟已删除");
+      }
+
+      function setupAlarm() {
+        document.getElementById("addAlarmBtn").onclick = function() {
+          var timeInput = document.getElementById("alarmTime").value;
+          var labelInput = document.getElementById("alarmLabel").value;
+          var repeat = document.getElementById("repeatDaily").checked;
+
+          if (!timeInput) {
+            showNotification("请选择闹钟时间");
+            return;
+          }
+
+          var alarm = {
+            id: Date.now(),
+            time: timeInput,
+            label: labelInput || "闹钟",
+            repeat: repeat,
+            enabled: true,
+            triggered: false
+          };
+
+          alarms.push(alarm);
+          saveAlarms();
+          renderAlarms();
+
+          document.getElementById("alarmTime").value = "";
+          document.getElementById("alarmLabel").value = "";
+          document.getElementById("repeatDaily").checked = false;
+
+          showNotification("闹钟已添加：" + alarm.time);
+        };
+      }
+
+      function checkAlarms() {
+        if (window.api && window.api.getAlarms) return;
+        var now = new Date();
+        var currentTime = pad(now.getHours()) + ":" + pad(now.getMinutes());
+        for (var i = 0; i < alarms.length; i++) {
+          var alarm = alarms[i];
+          if (alarm.enabled && alarm.time === currentTime && !alarm.triggered) {
+            alarm.triggered = true;
+            playRingtone();
+            showNotification(alarm.label);
+            if (!alarm.repeat) {
+              alarm.enabled = false;
+              saveAlarms();
+              renderAlarms();
+            } else {
+              (function(a) {
+                setTimeout(function() { a.triggered = false; }, 60000);
+              })(alarm);
+            }
+          }
+        }
+      }
+
+      // ==================== 铃声（修复版：支持完整播放）====================
+      function getPlayMode() {
+        var radios = document.querySelectorAll('input[name="playMode"]');
+        for (var i = 0; i < radios.length; i++) {
+          if (radios[i].checked) return radios[i].value;
+        }
+        return "full";
+      }
+
+      function stopCurrentAudio() {
+        if (currentAudio) {
+          try {
+            currentAudio.pause();
+            currentAudio.currentTime = 0;
+          } catch (e) {}
+          currentAudio = null;
+        }
+        el.audioControl.className = "audio-control";
+        if (window._audioTimeout) {
+          clearTimeout(window._audioTimeout);
+          window._audioTimeout = null;
+        }
+      }
+
+      function playRingtone(src) {
+        // 停止之前的声音
+        stopCurrentAudio();
+
+        var mode = getPlayMode();
+        var playSrc = src || customRingtoneData || defaultRingtoneSrc;
+        console.log("[Audio] playRingtone called, mode=" + mode + ", hasSrc=" + !!playSrc + ", srcLen=" + (playSrc ? playSrc.length : 0));
+        el.audioStatus.textContent = "正在播放...";
+        el.audioControl.className = "audio-control show";
+
+        // 先恢复 AudioContext（Electron 自动播放策略可能暂停音频）
+        try {
+          var resumeCtx = new (window.AudioContext || window.webkitAudioContext)();
+          if (resumeCtx.state === "suspended") {
+            resumeCtx.resume();
+          }
+          resumeCtx.close();
+        } catch (e) {
+          console.warn("[Audio] AudioContext resume failed:", e);
+        }
+
+        if (playSrc) {
+          try {
+            currentAudio = new Audio(playSrc);
+            currentAudio.volume = 0.8;
+            currentAudio.loop = mode === "manual";
+            console.log("[Audio] Audio element created, attempting play...");
+
+            currentAudio.onended = function() {
+              el.audioStatus.textContent = "✓ 播放完毕";
+              setTimeout(function() {
+                el.audioControl.className = "audio-control";
+              }, 2000);
+            };
+
+            currentAudio.onerror = function() {
+              el.audioStatus.textContent = "✗ 播放错误，使用默认提示音";
+              playDefaultSound(mode);
+            };
+
+            currentAudio.play().catch(function(err) {
+              el.audioStatus.textContent = "播放失败";
+              console.error("[Audio] play() failed:", err.message, err.name);
+              playDefaultSound(mode);
+            });
+
+            // 根据模式设置停止时间
+            if (mode === "30s") {
+              window._audioTimeout = setTimeout(stopCurrentAudio, 30000);
+            } else if (mode === "60s") {
+              window._audioTimeout = setTimeout(stopCurrentAudio, 60000);
+            }
+            // "full" 播放完整音频，"manual" 循环直到手动停止
+
+          } catch (e) {
+            playDefaultSound(mode);
+          }
+        } else {
+          playDefaultSound(mode);
+        }
+      }
+
+      function playDefaultSound(mode) {
+        try {
+          console.log("[Audio] playDefaultSound called, mode=" + mode);
+          var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          if (audioCtx.state === "suspended") audioCtx.resume();
+          var oscillator = audioCtx.createOscillator();
+          var gainNode = audioCtx.createGain();
+          oscillator.connect(gainNode);
+          gainNode.connect(audioCtx.destination);
+          oscillator.frequency.setValueAtTime(800, audioCtx.currentTime);
+          oscillator.frequency.setValueAtTime(1000, audioCtx.currentTime + 0.3);
+          oscillator.frequency.setValueAtTime(800, audioCtx.currentTime + 0.6);
+          oscillator.frequency.setValueAtTime(1000, audioCtx.currentTime + 0.9);
+          gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+          gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 2);
+          oscillator.start(audioCtx.currentTime);
+          oscillator.stop(audioCtx.currentTime + 2);
+
+          el.audioStatus.textContent = "✓ 提示音播放完毕";
+          if (mode === "30s" || mode === "60s" || mode === "manual") {
+            window._audioTimeout = setTimeout(function() {
+              playDefaultSound(mode);
+            }, 2200);
+            if (mode === "30s") setTimeout(stopCurrentAudio, 30000);
+            if (mode === "60s") setTimeout(stopCurrentAudio, 60000);
+          } else {
+            setTimeout(function() {
+              el.audioControl.className = "audio-control";
+            }, 2500);
+          }
+        } catch (e) {}
+      }
+
+      function setupRingtone() {
+        document.getElementById("selectRingtoneBtn").onclick = function() {
+          document.getElementById("ringtoneFile").click();
+        };
+
+        document.getElementById("ringtoneFile").onchange = function(e) {
+          var file = e.target.files[0];
+          if (!file) return;
+          if (!/\.(wav|mp3)$/i.test(file.name)) {
+            showNotification("请选择 WAV 或 MP3 铃声文件");
+            e.target.value = "";
+            return;
+          }
+          if (file.size > 5 * 1024 * 1024) {
+            showNotification("铃声文件太大，请选择不超过 5MB 的文件");
+            e.target.value = "";
+            return;
+          }
+          var reader = new FileReader();
+          reader.onload = async function(event) {
+            try {
+              customRingtoneData = event.target.result;
+              customRingtoneName = file.name;
+              if (window.api && window.api.setRingtone) {
+                await window.api.setRingtone({ src: customRingtoneData, name: customRingtoneName });
+              }
+              el.ringtoneName.textContent = "已选择: " + file.name;
+              showNotification("铃声已更换，播放闹钟时会使用");
+            } catch (err) {
+              showNotification("铃声文件太大，请选择小于5MB的文件");
+            }
+          };
+          reader.readAsDataURL(file);
+        };
+
+        // 显示已选择的铃声
+        if (customRingtoneData && customRingtoneName) {
+          el.ringtoneName.textContent = "已选择: " + customRingtoneName;
+        }
+
+        // 停止按钮
+        document.getElementById("stopAudioBtn").onclick = stopCurrentAudio;
+      }
+
+      async function setupSettings() {
+        if (!window.api || !window.api.getSettings) {
+          el.autoStartSetting.disabled = true;
+          el.keepAliveSetting.disabled = true;
+          el.quitAppBtn.style.display = "none";
+          return;
+        }
+
+        var settings = await window.api.getSettings();
+        el.autoStartSetting.checked = !!settings.autoStartEnabled;
+        el.keepAliveSetting.checked = !!settings.keepAliveEnabled;
+        if (settings.dataFile) {
+          el.dataPathInfo.textContent = "数据文件：" + settings.dataFile;
+        }
+
+        async function saveSettings() {
+          var next = {
+            autoStartEnabled: el.autoStartSetting.checked,
+            keepAliveEnabled: el.keepAliveSetting.checked
+          };
+          await window.api.setSettings(next);
+          showNotification("设置已保存");
+        }
+
+        el.autoStartSetting.onchange = saveSettings;
+        el.keepAliveSetting.onchange = saveSettings;
+        el.quitAppBtn.onclick = function() {
+          if (confirm("确定彻底退出智域计时吗？")) {
+            window.api.quitApp();
+          }
+        };
+
+        if (window.api.onSettingsUpdated) {
+          window.api.onSettingsUpdated(function(nextSettings) {
+            el.autoStartSetting.checked = !!nextSettings.autoStartEnabled;
+            el.keepAliveSetting.checked = !!nextSettings.keepAliveEnabled;
+          });
+        }
+      }
+
+      function setupMainProcessEvents() {
+        if (!window.api) return;
+        if (window.api.onPlayRingtone) {
+          window.api.onPlayRingtone(function(src) {
+            playRingtone(src);
+          });
+        }
+        if (window.api.onAlarmTriggered) {
+          window.api.onAlarmTriggered(function(alarm) {
+            showNotification(alarm.label || alarm.time || "闹钟");
+          });
+        }
+        if (window.api.onAlarmsUpdated) {
+          window.api.onAlarmsUpdated(function(nextAlarms) {
+            alarms = Array.isArray(nextAlarms) ? nextAlarms : [];
+            renderAlarms();
+          });
+        }
+      }
+
+      // ==================== 收纳到宠物 ====================
+      function setupMinimize() {
+        document.getElementById("minimizeBtn").onclick = async function() {
+          // 优先通过 IPC 通知主进程：隐藏主窗口 + 显示宠物窗口
+          if (window.api && window.api.minimizeToPet) {
+            try {
+              await window.api.minimizeToPet();
+              showNotification("已收纳到宠物模式");
+            } catch (e) {
+              showNotification("收纳失败: " + e.message);
+            }
+          } else {
+            // fallback：纯浏览器 PWA 模式（Electron 中不会走到这里）
+            showNotification("请直接打开 pet.html 启动宠物窗口");
+          }
+        };
+      }
+
+      // ==================== 主题切换 ====================
+      function applyTheme(theme) {
+        document.documentElement.setAttribute("data-theme", theme);
+        var sw = document.getElementById("themeSwitch");
+        if (sw) {
+          sw.className = theme === "dark" ? "theme-switch active" : "theme-switch";
+        }
+      }
+
+      function setupTheme() {
+        var savedTheme = "light";
+        try { savedTheme = localStorage.getItem("zhiyu-theme") || "light"; } catch (e) {}
+        applyTheme(savedTheme);
+
+        var toggle = document.getElementById("themeToggle");
+        if (toggle) {
+          toggle.onclick = function() {
+            var current = document.documentElement.getAttribute("data-theme") || "light";
+            var next = current === "dark" ? "light" : "dark";
+            applyTheme(next);
+            try { localStorage.setItem("zhiyu-theme", next); } catch (e) {}
+            // 同步到宠物窗口
+            if (window.api && window.api.setTheme) {
+              window.api.setTheme(next);
+            }
+          };
+        }
+
+        // 监听来自主进程的主题同步（宠物窗口触发 -> 主窗口）
+        if (window.api && window.api.onThemeChanged) {
+          window.api.onThemeChanged(function(theme) {
+            applyTheme(theme);
+            try { localStorage.setItem("zhiyu-theme", theme); } catch (e) {}
+          });
+        }
+      }
+
+      // ==================== 数据导入导出 ====================
+      function setupDataIO() {
+        var exportBtn = document.getElementById("exportDataBtn");
+        var importBtn = document.getElementById("importDataBtn");
+
+        if (exportBtn && window.api && window.api.exportData) {
+          exportBtn.onclick = async function() {
+            try {
+              var result = await window.api.exportData();
+              if (result.success) {
+                showNotification("数据已导出");
+              } else if (result.error) {
+                showNotification("导出失败：" + result.error);
+              }
+            } catch (e) {
+              showNotification("导出失败：" + e.message);
+            }
+          };
+        }
+
+        if (importBtn && window.api && window.api.importData) {
+          importBtn.onclick = async function() {
+            if (!confirm("导入数据将覆盖当前的闹钟、计次和设置，确定继续吗？")) return;
+            try {
+              var result = await window.api.importData();
+              if (result.success) {
+                // 重新加载页面数据
+                await loadSavedData();
+                renderAlarms();
+                renderLaps();
+
+                // 恢复倒计时状态
+                try {
+                  if (window.api.getCountdown) {
+                    var savedCountdown = await window.api.getCountdown();
+                    if (savedCountdown && savedCountdown.targetDate) {
+                      var target = new Date(savedCountdown.targetDate);
+                      if (target > new Date()) {
+                        startCountdown(target, savedCountdown.label || "自定义事件");
+                      } else {
+                        playRingtone();
+                        showNotification((savedCountdown.label || "倒计时") + " 已到期");
+                        notifySystem("倒计时提醒", (savedCountdown.label || "倒计时") + " 已到期");
+                        if (window.api.setCountdown) window.api.setCountdown(null);
+                      }
+                    }
+                  }
+                } catch (e) {}
+
+                // 恢复正计时状态
+                try {
+                  if (window.api.getStopwatch) {
+                    var savedSw = await window.api.getStopwatch();
+                    if (savedSw) {
+                      if (savedSw.running && savedSw.startTime) {
+                        clearInterval(timerInterval);
+                        timerElapsed = Date.now() - savedSw.startTime;
+                        timerStartTime = savedSw.startTime;
+                        timerInterval = setInterval(updateTimer, 10);
+                        timerRunning = true;
+                        document.getElementById("startTimerBtn").textContent = "运行中";
+                        document.getElementById("startTimerBtn").disabled = true;
+                        document.getElementById("pauseTimerBtn").disabled = false;
+                        document.getElementById("lapBtn").disabled = false;
+                        updateTimer();
+                      } else if (savedSw.elapsed > 0) {
+                        timerElapsed = savedSw.elapsed;
+                        var totalSeconds = Math.floor(timerElapsed / 1000);
+                        var hours = Math.floor(totalSeconds / 3600);
+                        var minutes = Math.floor((totalSeconds % 3600) / 60);
+                        var seconds = totalSeconds % 60;
+                        var ms = timerElapsed % 1000;
+                        el.timerDisplay.textContent = pad(hours) + ":" + pad(minutes) + ":" + pad(seconds);
+                        el.timerMs.textContent = "." + ("00" + ms).slice(-3);
+                      }
+                    }
+                  }
+                } catch (e) {}
+
+                showNotification("数据已导入");
+              } else if (result.error) {
+                showNotification("导入失败：" + result.error);
+              }
+            } catch (e) {
+              showNotification("导入失败：" + e.message);
+            }
+          };
+        }
+      }
+
+      // ==================== 设置弹窗开关 ====================
+      function setupSettingsModal() {
+        var overlay = document.getElementById("settingsOverlay");
+        var openBtn = document.getElementById("settingsBtn");
+        var closeBtn = document.getElementById("settingsCloseBtn");
+
+        function openSettings() {
+          overlay.className = "settings-overlay show";
+        }
+        function closeSettings() {
+          overlay.className = "settings-overlay";
+        }
+
+        if (openBtn) openBtn.onclick = openSettings;
+        if (closeBtn) closeBtn.onclick = closeSettings;
+
+        // 点击遮罩关闭
+        if (overlay) {
+          overlay.onclick = function(e) {
+            if (e.target === overlay) closeSettings();
+          };
+        }
+
+        // ESC 关闭
+        document.addEventListener("keydown", function(e) {
+          if (e.key === "Escape" && overlay && overlay.className.indexOf("show") !== -1) {
+            closeSettings();
+          }
+        });
+      }
+
+      // ==================== 初始化 ====================
+      async function init() {
+        await loadSavedData();
+
+        // 恢复倒计时
+        try {
+          if (window.api && window.api.getCountdown) {
+            var savedCountdown = await window.api.getCountdown();
+            if (savedCountdown && savedCountdown.targetDate) {
+              var target = new Date(savedCountdown.targetDate);
+              if (target > new Date()) {
+                startCountdown(target, savedCountdown.label || "自定义事件");
+              } else {
+                playRingtone();
+                showNotification((savedCountdown.label || "倒计时") + " 已到期");
+                notifySystem("倒计时提醒", (savedCountdown.label || "倒计时") + " 已到期");
+                if (window.api.setCountdown) window.api.setCountdown(null);
+              }
+            }
+          }
+        } catch (e) {}
+
+        // 恢复正计时
+        try {
+          if (window.api && window.api.getStopwatch) {
+            var savedSw = await window.api.getStopwatch();
+            if (savedSw) {
+              if (savedSw.running && savedSw.startTime) {
+                timerElapsed = Date.now() - savedSw.startTime;
+                timerStartTime = savedSw.startTime;
+                timerInterval = setInterval(updateTimer, 10);
+                timerRunning = true;
+                document.getElementById("startTimerBtn").textContent = "运行中";
+                document.getElementById("startTimerBtn").disabled = true;
+                document.getElementById("pauseTimerBtn").disabled = false;
+                document.getElementById("lapBtn").disabled = false;
+                updateTimer();
+              } else if (savedSw.elapsed > 0) {
+                timerElapsed = savedSw.elapsed;
+                var totalSeconds = Math.floor(timerElapsed / 1000);
+                var hours = Math.floor(totalSeconds / 3600);
+                var minutes = Math.floor((totalSeconds % 3600) / 60);
+                var seconds = totalSeconds % 60;
+                var ms = timerElapsed % 1000;
+                el.timerDisplay.textContent = pad(hours) + ":" + pad(minutes) + ":" + pad(seconds);
+                el.timerMs.textContent = "." + ("00" + ms).slice(-3);
+              }
+            }
+          }
+        } catch (e) {}
+
+        updateDateTime();
+        setInterval(updateDateTime, 1000);
+        setInterval(checkAlarms, 1000);
+        setupMainProcessEvents();
+        setupTabs();
+        setupPresets();
+        setupTimer();
+        setupAlarm();
+        setupRingtone();
+        await setupSettings();
+        setupMinimize();
+        setupTheme();
+        setupDataIO();
+        setupSettingsModal();
+        renderAlarms();
+        renderLaps();  // 渲染保存的计次
+        window._initComplete = Date.now();
+        console.log("桌面计时器初始化完成 ✓");
+
+      }
+
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", function() {
+          init().catch(function(e) { showError("初始化失败: " + e.message); });
+        });
+      } else {
+        init().catch(function(e) { showError("初始化失败: " + e.message); });
+      }
+
+    } catch (e) {
+      showError("初始化失败: " + e.message);
+    }
+  </script>
+</body>
+</html>

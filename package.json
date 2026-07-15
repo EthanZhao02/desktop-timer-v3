@@ -1,0 +1,40 @@
+{
+  "name": "zhiyu-timer",
+  "version": "1.0.0",
+  "description": "智域计时 - 桌面计时器与桌面宠物",
+  "main": "main.js",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "start": "electron .",
+    "dev": "electron . --enable-logging",
+    "test:ui": "electron tests/capture-ui.js",
+    "verify:package": "node tests/verify-package.js",
+    "build": "electron-builder",
+    "build-portable": "electron-builder --win portable --x64"
+  },
+  "author": "Ethan智域小店",
+  "devDependencies": {
+    "electron": "^43.1.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "cn.ethan.zhiyu-timer",
+    "productName": "智域计时",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": "portable",
+      "icon": "assets/icon.ico"
+    },
+    "files": [
+      "main.js",
+      "timer-core.js",
+      "preload.js",
+      "index.html",
+      "pet.html",
+      "assets/**/*",
+      "package.json"
+    ]
+  }
+}
