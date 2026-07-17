@@ -393,7 +393,7 @@ body.alarm-flash {
   display: none;
   flex-direction: column;
   overflow: hidden;
-  z-index: 100;
+  z-index: 9999;
   -webkit-app-region: no-drag;
   font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
   backdrop-filter: blur(20px);
@@ -466,14 +466,15 @@ body.alarm-flash {
   border-radius: 8px;
   color: #a29bfe;
   cursor: pointer;
-  font-size: 14px;
-  width: 28px;
+  font-size: 12px;
+  padding: 0 10px;
   height: 28px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   transition: all 0.15s ease;
   -webkit-app-region: no-drag;
+  white-space: nowrap;
 }
 
 .pet-chat-iconbtn:hover {
