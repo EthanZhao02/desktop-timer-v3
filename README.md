@@ -6,6 +6,7 @@
   <img src="https://img.shields.io/github/stars/EthanZhao02/desktop-timer-v3?style=flat-square&color=6c5ce7" alt="Stars">
   <img src="https://img.shields.io/github/forks/EthanZhao02/desktop-timer-v3?style=flat-square&color=6c5ce7" alt="Forks">
   <img src="https://img.shields.io/badge/Platform-Windows-blue?style=flat-square" alt="Platform">
+  <img src="https://img.shields.io/badge/Platform-Mac%20(Beta)-orange?style=flat-square" alt="Mac (Beta)">
   <img src="https://img.shields.io/badge/Electron-43-6c5ce7?style=flat-square" alt="Electron">
 </p>
 
@@ -48,18 +49,25 @@
 
 ---
 
+## 🍎 平台支持
+
+| 平台 | 计时器 | 宠物 UI | 窗口感知姿态 | 锁屏关怀 |
+|------|--------|---------|------------|---------|
+| ✅ **Windows 10/11** | ✅ 完整 | ✅ 完整 | ✅ 完整 | ✅ 完整 |
+| 🟡 **Mac（Beta）** | ✅ 完整 | ✅ 完整 | ⏳ 规划中 | ⏳ 规划中 |
+
+> 💡 Mac 版窗口感知和锁屏关怀功能正在适配中，敬请期待。
+
 ## 🚀 快速开始
 
-### 下载即用（推荐）
+### 下载即用（Windows）
 
 > 下载 releases 中的 `智域计时 1.0.x.exe`，双击运行，无需安装
 
-```powershell
-# 国内网络打包（可选）
-$env:ELECTRON_MIRROR = "https://registry.npmmirror.com/-/binary/electron/"
-npm install
-npm run build-portable
-```
+### Mac 用户
+
+> Mac 版正在开发中，可先 Star 本项目关注进度：
+> [https://github.com/EthanZhao02/desktop-timer-v3/releases](https://github.com/EthanZhao02/desktop-timer-v3/releases)
 
 ### 开发调试
 
