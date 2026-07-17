@@ -41,4 +41,7 @@ contextBridge.exposeInMainWorld('api', {
   // AI 对话（多模型）
   sendChatMessage: (msg, modelId) => ipcRenderer.invoke('send-chat-message', msg, modelId),
   getModelConfigs: () => ipcRenderer.invoke('get-model-configs'),
+  // API Key 管理
+  getApiKeys: () => ipcRenderer.invoke('get-api-keys'),
+  saveApiKeys: (keys) => ipcRenderer.invoke('save-api-keys', keys),
 });

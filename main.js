@@ -838,3 +838,40 @@ app.on('window-all-closed', (e) => {
 });
 
 app.on('before-quit', () => { isQuitting = true; });
+
+// ==================== API Key 管理 ====================
+const apiKeysPath = path.join(app.getPath('userData'), 'api-keys.json');
+
+// 加载 API Keys
+function loadApiKeys() {
+  try {
+    if (fs.existsSync(apiKeysPath)) {
+      const data = fs.readFileSync(apiKeysPath, 'utf-8');
+      return JSON.parse(data);
+    }
+  } catch (e) {
+    safeError('[main] 加载 API Keys 失败:', e);
+  }
+  return {};
+}
+
+// 保存 API Keys
+function saveApiKeys(keys) {
+  try {
+    fs.writeFileSync(apiKeysPath, JSON.stringify(keys, null, 2), 'utf-8');
+    safeLog('[main] API Keys 已保存');
+    return true;
+  } catch (e) {
+    safeError('[main] 保存 API Keys 失败:', e);
+    return false;
+  }
+}
+
+// IPC 处理
+ipcMain.handle('get-api-keys', () => {
+  return loadApiKeys();
+});
+
+ipcMain.handle('save-api-keys', (event, keys) => {
+  return saveApiKeys(keys);
+});

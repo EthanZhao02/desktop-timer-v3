@@ -692,3 +692,205 @@ body.alarm-flash {
   color: rgba(255,255,255,0.3);
   margin-top: 8px;
 }
+
+/* API 提示条 */
+.pet-chat-api-notice {
+  background: rgba(255,107,107,0.15);
+  border: 1px solid rgba(255,107,107,0.3);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin: 8px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  color: #ff9f9f;
+}
+
+.api-notice-btn {
+  background: rgba(255,107,107,0.25);
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 11px;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.api-notice-btn:hover {
+  background: rgba(255,107,107,0.4);
+}
+
+/* ==================== API 设置面板 ==================== */
+.pet-settings-panel {
+  position: absolute;
+  bottom: 100px;
+  right: 8px;
+  width: 280px;
+  background: linear-gradient(180deg, rgba(26,26,46,0.98) 0%, rgba(22,22,38,0.98) 100%);
+  border: 1px solid rgba(108,92,231,0.35);
+  border-radius: 16px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5), 0 0 30px rgba(108,92,231,0.15);
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 10000;
+  -webkit-app-region: no-drag;
+  font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
+  backdrop-filter: blur(20px);
+  pointer-events: auto;
+}
+
+.pet-settings-panel.show {
+  display: flex;
+  animation: settingsSlideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes settingsSlideIn {
+  from { opacity: 0; transform: translateY(10px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.pet-settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: linear-gradient(90deg, rgba(108,92,231,0.15) 0%, rgba(108,92,231,0.05) 100%);
+  border-bottom: 1px solid rgba(108,92,231,0.2);
+}
+
+.pet-settings-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.pet-settings-close {
+  background: rgba(255,255,255,0.06);
+  border: none;
+  border-radius: 6px;
+  color: #888;
+  cursor: pointer;
+  font-size: 16px;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.pet-settings-close:hover {
+  background: rgba(255,107,107,0.3);
+  color: #ff8a8a;
+}
+
+.pet-settings-content {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.settings-label {
+  font-size: 12px;
+  color: #a29bfe;
+  font-weight: 500;
+}
+
+.settings-input-row {
+  display: flex;
+  gap: 8px;
+}
+
+.settings-input {
+  flex: 1;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid rgba(108,92,231,0.25);
+  border-radius: 8px;
+  color: #fff;
+  font-size: 12px;
+  padding: 8px 12px;
+  outline: none;
+  font-family: inherit;
+  transition: all 0.15s ease;
+}
+
+.settings-input:focus {
+  border-color: rgba(108,92,231,0.5);
+  background: rgba(0,0,0,0.4);
+}
+
+.settings-input::placeholder {
+  color: rgba(255,255,255,0.3);
+}
+
+.settings-toggle {
+  background: rgba(108,92,231,0.15);
+  border: 1px solid rgba(108,92,231,0.3);
+  border-radius: 8px;
+  color: #a29bfe;
+  font-size: 11px;
+  padding: 0 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.settings-toggle:hover {
+  background: rgba(108,92,231,0.25);
+  border-color: rgba(108,92,231,0.5);
+}
+
+.settings-hint {
+  font-size: 11px;
+  color: rgba(255,255,255,0.35);
+}
+
+.settings-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(108,92,231,0.15);
+}
+
+.settings-btn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: none;
+  font-family: inherit;
+}
+
+.settings-btn-secondary {
+  background: rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.7);
+}
+
+.settings-btn-secondary:hover {
+  background: rgba(255,255,255,0.15);
+  color: #fff;
+}
+
+.settings-btn-primary {
+  background: linear-gradient(135deg, rgba(108,92,231,0.8) 0%, rgba(108,92,231,0.6) 100%);
+  color: #fff;
+}
+
+.settings-btn-primary:hover {
+  background: linear-gradient(135deg, rgba(108,92,231,1) 0%, rgba(108,92,231,0.8) 100%);
+}

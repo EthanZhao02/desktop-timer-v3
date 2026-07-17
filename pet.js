@@ -460,6 +460,154 @@ try {
   var currentModel = 'qclaw'; // 默认模型
   var modelConfigs = {}; // 模型配置缓存
 
+  // ==================== API 设置面板 ====================
+  var settingsPanel = document.getElementById('petSettingsPanel');
+  var apiNotice = document.getElementById('apiNotice');
+
+  // 加载保存的 API Key
+  async function loadSavedApiKeys() {
+    try {
+      if (window.api && window.api.getApiKeys) {
+        var keys = await window.api.getApiKeys();
+        if (keys.deepseek) modelConfigs.deepseek = { apiKey: keys.deepseek };
+        if (keys.volcano) modelConfigs.volcano = { apiKey: keys.volcano };
+      }
+    } catch (e) {
+      console.log('[Pet] 加载 API Key 失败:', e);
+    }
+  }
+
+  // 显示/隐藏设置面板
+  function toggleSettingsPanel(show) {
+    if (!settingsPanel) return;
+    if (show) {
+      // 填充当前值
+      var deepseekInput = document.getElementById('deepseekKeyInput');
+      var volcanoInput = document.getElementById('volcanoKeyInput');
+      if (deepseekInput && modelConfigs.deepseek) {
+        deepseekInput.value = modelConfigs.deepseek.apiKey || '';
+      }
+      if (volcanoInput && modelConfigs.volcano) {
+        volcanoInput.value = modelConfigs.volcano.apiKey || '';
+      }
+      settingsPanel.classList.add('show');
+    } else {
+      settingsPanel.classList.remove('show');
+    }
+  }
+
+  // 保存 API Key
+  async function saveApiKeys() {
+    var deepseekKey = document.getElementById('deepseekKeyInput').value.trim();
+    var volcanoKey = document.getElementById('volcanoKeyInput').value.trim();
+
+    // 更新本地配置
+    if (deepseekKey) modelConfigs.deepseek = { apiKey: deepseekKey };
+    if (volcanoKey) modelConfigs.volcano = { apiKey: volcanoKey };
+
+    // 保存到主进程
+    try {
+      if (window.api && window.api.saveApiKeys) {
+        await window.api.saveApiKeys({
+          deepseek: deepseekKey,
+          volcano: volcanoKey
+        });
+      }
+    } catch (e) {
+      console.log('[Pet] 保存 API Key 失败:', e);
+    }
+
+    toggleSettingsPanel(false);
+    // 检查当前模型是否需要 API Key
+    checkApiKeyNotice();
+  }
+
+  // 检查并显示 API Key 提示
+  function checkApiKeyNotice() {
+    if (!apiNotice) return;
+    var noticeText = apiNotice.querySelector('.api-notice-text');
+
+    if (currentModel === 'deepseek' && !modelConfigs.deepseek) {
+      noticeText.textContent = 'DeepSeek 需要配置 API Key';
+      apiNotice.style.display = 'flex';
+    } else if (currentModel === 'volcano' && !modelConfigs.volcano) {
+      noticeText.textContent = '火山引擎需要配置 API Key';
+      apiNotice.style.display = 'flex';
+    } else {
+      apiNotice.style.display = 'none';
+    }
+  }
+
+  // 绑定设置面板事件
+  function bindSettingsEvents() {
+    // 设置按钮
+    var settingsBtn = document.getElementById('apiSettingsBtn');
+    if (settingsBtn) {
+      settingsBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        toggleSettingsPanel(true);
+      });
+    }
+
+    // 关闭按钮
+    var closeBtn = document.getElementById('settingsClose');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        toggleSettingsPanel(false);
+      });
+    }
+
+    // 取消按钮
+    var cancelBtn = document.getElementById('settingsCancel');
+    if (cancelBtn) {
+      cancelBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        toggleSettingsPanel(false);
+      });
+    }
+
+    // 保存按钮
+    var saveBtn = document.getElementById('settingsSave');
+    if (saveBtn) {
+      saveBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        saveApiKeys();
+      });
+    }
+
+    // 显示/隐藏密码
+    var toggleDeepseek = document.getElementById('toggleDeepseek');
+    var deepseekInput = document.getElementById('deepseekKeyInput');
+    if (toggleDeepseek && deepseekInput) {
+      toggleDeepseek.addEventListener('click', function(e) {
+        e.stopPropagation();
+        if (deepseekInput.type === 'password') {
+          deepseekInput.type = 'text';
+          toggleDeepseek.textContent = '隐藏';
+        } else {
+          deepseekInput.type = 'password';
+          toggleDeepseek.textContent = '显示';
+        }
+      });
+    }
+
+    var toggleVolcano = document.getElementById('toggleVolcano');
+    var volcanoInput = document.getElementById('volcanoKeyInput');
+    if (toggleVolcano && volcanoInput) {
+      toggleVolcano.addEventListener('click', function(e) {
+        e.stopPropagation();
+        if (volcanoInput.type === 'password') {
+          volcanoInput.type = 'text';
+          toggleVolcano.textContent = '隐藏';
+        } else {
+          volcanoInput.type = 'password';
+          toggleVolcano.textContent = '显示';
+        }
+      });
+    }
+  }
+
   // 加载模型配置
   async function loadModelConfigs() {
     try {
@@ -477,6 +625,8 @@ try {
     currentModel = modelId;
     var modelNames = { qclaw: '星野', deepseek: 'DeepSeek', volcano: '火山引擎' };
     addChatMessage('已切换到: ' + (modelNames[modelId] || modelId), 'system');
+    // 检查是否需要 API Key
+    checkApiKeyNotice();
   }
 
   // 更新模型选择器
@@ -613,6 +763,8 @@ try {
 
   // ==================== 事件绑定（在 init 中统一绑定）====================
   function bindChatEvents() {
+    // 设置面板事件
+    bindSettingsEvents();
     // 发送按钮
     var sendBtn = document.getElementById('petChatSend');
     if (sendBtn) {
@@ -777,6 +929,9 @@ try {
 
     // 绑定对话面板事件（确保DOM已加载）
     bindChatEvents();
+
+    // 加载保存的 API Key
+    loadSavedApiKeys();
 
     // 启动自动姿态切换（5秒后开始，给预加载时间）
     setTimeout(function() {
