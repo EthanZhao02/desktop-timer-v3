@@ -481,14 +481,24 @@ try {
   function toggleSettingsPanel(show) {
     if (!settingsPanel) return;
     if (show) {
-      // 填充当前值
+      // 填充当前值和状态指示器
       var deepseekInput = document.getElementById('deepseekKeyInput');
       var volcanoInput = document.getElementById('volcanoKeyInput');
-      if (deepseekInput && modelConfigs.deepseek) {
-        deepseekInput.value = modelConfigs.deepseek.apiKey || '';
+      var deepseekStatus = document.getElementById('deepseekStatus');
+      var volcanoStatus = document.getElementById('volcanoStatus');
+
+      var hasDeepseek = modelConfigs.deepseek && modelConfigs.deepseek.apiKey;
+      var hasVolcano = modelConfigs.volcano && modelConfigs.volcano.apiKey;
+
+      if (deepseekInput) deepseekInput.value = hasDeepseek ? modelConfigs.deepseek.apiKey : '';
+      if (volcanoInput) volcanoInput.value = hasVolcano ? modelConfigs.volcano.apiKey : '';
+      if (deepseekStatus) {
+        deepseekStatus.textContent = hasDeepseek ? '已配置 ✅' : '未配置';
+        deepseekStatus.className = 'settings-status' + (hasDeepseek ? ' configured' : '');
       }
-      if (volcanoInput && modelConfigs.volcano) {
-        volcanoInput.value = modelConfigs.volcano.apiKey || '';
+      if (volcanoStatus) {
+        volcanoStatus.textContent = hasVolcano ? '已配置 ✅' : '未配置';
+        volcanoStatus.className = 'settings-status' + (hasVolcano ? ' configured' : '');
       }
       settingsPanel.classList.add('show');
       // 通知主进程面板已显示，确保置顶
@@ -527,6 +537,19 @@ try {
 
     // 重新加载配置确保同步
     await loadModelConfigs();
+
+    // 更新状态指示器
+    var deepseekStatus = document.getElementById('deepseekStatus');
+    var volcanoStatus = document.getElementById('volcanoStatus');
+    if (deepseekStatus) {
+      deepseekStatus.textContent = deepseekKey ? '已配置 ✅' : '未配置';
+      deepseekStatus.className = 'settings-status' + (deepseekKey ? ' configured' : '');
+    }
+    if (volcanoStatus) {
+      volcanoStatus.textContent = volcanoKey ? '已配置 ✅' : '未配置';
+      volcanoStatus.className = 'settings-status' + (volcanoKey ? ' configured' : '');
+    }
+
     toggleSettingsPanel(false);
     // 检查当前模型是否需要 API Key
     checkApiKeyNotice();
@@ -851,7 +874,13 @@ try {
       closeBtn.addEventListener('click', function(e) {
         e.stopPropagation();
         var panel = document.getElementById('petChatPanel');
-        if (panel) panel.classList.remove('show');
+        if (panel) {
+          panel.classList.remove('show');
+          // 通知主进程面板已关闭
+          if (window.api && window.api.setPanelVisible) {
+            window.api.setPanelVisible(false);
+          }
+        }
       });
     }
 
@@ -896,6 +925,10 @@ try {
     e.stopPropagation();
     if (chatPanel && chatPanel.classList.contains('show')) {
       chatPanel.classList.remove('show');
+      // 通知主进程面板已关闭
+      if (window.api && window.api.setPanelVisible) {
+        window.api.setPanelVisible(false);
+      }
       return;
     }
     if (window.api && window.api.hidePet) {

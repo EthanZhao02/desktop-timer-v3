@@ -584,43 +584,48 @@ try {
   safeError('[main] 加载模型配置失败:', e.message);
 }
 
-// 暴露模型配置给前端（隐藏敏感 token）
-ipcMain.handle('get-model-configs', () => {
-  return Object.fromEntries(
-    Object.entries(MODEL_CONFIGS).map(([k, v]) => [k, { name: v.name, model: v.model }])
-  );
-});
-
-// 发送消息
+// 发送消息 - 合并已保存的 API Key
 ipcMain.handle('send-chat-message', async (e, message, modelId = 'qclaw') => {
   const config = MODEL_CONFIGS[modelId] || MODEL_CONFIGS.qclaw;
 
-  // 检查 API Key
-  if (!config.token && modelId !== 'qclaw') {
-    return { success: false, error: `${config.name} 需要配置 API Key` };
+  // 非 qclaw 模型：从已保存的 API Keys 文件中读取 token（优先于环境变量）
+  let token = config.token;
+  if (modelId !== 'qclaw') {
+    const savedKeys = loadApiKeys();
+    if (savedKeys[modelId]) {
+      token = savedKeys[modelId];
+    }
+    if (!token) {
+      return { success: false, error: `${config.name} 需要配置 API Key，请在设置面板中配置` };
+    }
   }
+
+  // 30秒超时控制
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000);
 
   try {
     const response = await fetch(config.url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${config.token}`
+        'Authorization': `Bearer ${token}`
       },
       body: JSON.stringify({
         model: config.model,
         messages: [{ role: 'user', content: String(message) }],
         max_tokens: config.maxTokens
-      })
+      }),
+      signal: controller.signal
     });
 
     if (!response.ok) {
       const errText = await response.text().catch(() => 'unknown');
       safeError(`[main] ${config.name} API error:`, response.status, errText);
       if (response.status === 401) {
-        return { success: false, error: `${config.name} API Key 无效` };
+        return { success: false, error: `${config.name} API Key 无效，请检查 Key 是否正确` };
       }
-      return { success: false, error: `请求失败 (${response.status})` };
+      return { success: false, error: `${config.name} 请求失败 (${response.status})` };
     }
 
     const data = await response.json();
@@ -628,11 +633,18 @@ ipcMain.handle('send-chat-message', async (e, message, modelId = 'qclaw') => {
     safeLog(`[main] ${config.name} 回复:`, reply.substring(0, 50));
     return { success: true, reply };
   } catch (err) {
+    clearTimeout(timeoutId);
+    if (err.name === 'AbortError') {
+      safeError(`[main] ${config.name} 请求超时(30s)`);
+      return { success: false, error: `${config.name} 请求超时，请稍后重试` };
+    }
     safeError(`[main] ${config.name} 连接失败:`, err.message);
     if (modelId === 'qclaw') {
       return { success: false, error: 'QClaw 未运行，请先启动星野助手' };
     }
     return { success: false, error: `${config.name} 连接失败，请检查网络` };
+  } finally {
+    clearTimeout(timeoutId);
   }
 });
 
@@ -883,14 +895,20 @@ ipcMain.handle('save-api-keys', (event, keys) => {
   return saveApiKeys(keys);
 });
 
-// 获取模型配置（前端用于检查 API Key 是否存在）
+// 获取模型配置（名称 + API Key 状态），合并两种数据源
 ipcMain.handle('get-model-configs', () => {
   const keys = loadApiKeys();
-  return {
-    deepseek: keys.deepseek ? { apiKey: keys.deepseek } : null,
-    volcano: keys.volcano ? { apiKey: keys.volcano } : null,
-    qclaw: { apiKey: null } // 星野本地模型，不需要配置
-  };
+  var result = {};
+  Object.keys(MODEL_CONFIGS).forEach(function(k) {
+    var cfg = MODEL_CONFIGS[k];
+    var hasKey = (k === 'qclaw') ? true : !!keys[k];
+    result[k] = hasKey ? {
+      name: cfg.name,
+      model: cfg.model,
+      apiKey: k === 'qclaw' ? null : (keys[k] || '')
+    } : null;
+  });
+  return result;
 });
 
 
