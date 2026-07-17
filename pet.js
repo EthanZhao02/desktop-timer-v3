@@ -14,6 +14,13 @@ try {
   var miniInfo = document.getElementById("miniInfo");
   var nextAlarmTime = document.getElementById("nextAlarmTime");
 
+  // 对话面板
+  var chatPanel = document.getElementById("petChatPanel");
+  var chatMessages = document.getElementById("petChatMessages");
+  var chatInput = document.getElementById("petChatInput");
+  var chatSendBtn = document.getElementById("petChatSend");
+  var chatCloseBtn = document.getElementById("petChatClose");
+
   // ==================== 多姿态系统 ====================
   var POSES = {
     idle:        "assets/pet-idle.png",
@@ -411,21 +418,111 @@ try {
   async function handlePetClick() {
     petImage.classList.add('ripple');
     setTimeout(function() { petImage.classList.remove('ripple'); }, 600);
-    try {
-      if (window.api && window.api.showMain) {
-        await window.api.showMain();
-        return;
-      }
-      showMessage("请手动打开主计时器窗口");
-    } catch (err) {
-      console.error("[Pet] 打开主窗口失败:", err);
-      showMessage("点击打开主窗口失败: " + err.message);
+    // 切换对话面板（点击宠物直接打开对话）
+    toggleChatPanel();
+  }
+
+  // ==================== 星野对话 ====================
+  var chatHistory = []; // 对话历史（最近5轮）
+  var chatLoading = false;
+
+  function toggleChatPanel() {
+    var isVisible = chatPanel.classList.contains('show');
+    if (isVisible) {
+      chatPanel.classList.remove('show');
+    } else {
+      chatPanel.classList.add('show');
+      // 聚焦输入框
+      setTimeout(function() { if (chatInput) chatInput.focus(); }, 50);
     }
+  }
+
+  function addChatMessage(text, type) {
+    if (!chatMessages) return;
+    var div = document.createElement('div');
+    div.className = 'pet-chat-msg ' + type;
+    div.textContent = text;
+    chatMessages.appendChild(div);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  }
+
+  function clearThinking() {
+    var el = chatMessages.querySelector('.thinking');
+    if (el) el.remove();
+  }
+
+  async function sendChatMessage() {
+    if (chatLoading) return;
+    var text = (chatInput.value || '').trim();
+    if (!text) return;
+
+    chatLoading = true;
+    chatSendBtn.disabled = true;
+    chatInput.value = '';
+
+    // 显示用户消息
+    addChatMessage(text, 'user');
+
+    // 显示思考中
+    addChatMessage('思考中...', 'thinking');
+
+    try {
+      var result;
+      if (window.api && window.api.sendChatMessage) {
+        result = await window.api.sendChatMessage(text);
+      } else {
+        result = { success: false, error: '对话接口不可用' };
+      }
+
+      clearThinking();
+
+      if (result && result.success) {
+        var reply = (result.reply || '').trim();
+        if (reply) {
+          addChatMessage(reply, 'ai');
+          // 更新对话历史（保留最近5轮）
+          chatHistory.push({ role: 'user', content: text });
+          chatHistory.push({ role: 'assistant', content: reply });
+          if (chatHistory.length > 10) chatHistory = chatHistory.slice(-10);
+        } else {
+          addChatMessage('（星野没有回复...）', 'ai');
+        }
+      } else {
+        addChatMessage(result && result.error ? result.error : '星野开小差了，稍后再试试~', 'error');
+      }
+    } catch (err) {
+      clearThinking();
+      addChatMessage('对话失败: ' + err.message, 'error');
+    } finally {
+      chatLoading = false;
+      chatSendBtn.disabled = false;
+    }
+  }
+
+  // 绑定对话事件
+  if (chatSendBtn) chatSendBtn.addEventListener('click', sendChatMessage);
+  if (chatInput) {
+    chatInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendChatMessage();
+      }
+    });
+  }
+  if (chatCloseBtn) {
+    chatCloseBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      chatPanel.classList.remove('show');
+    });
   }
 
   // ==================== 关闭按钮 ====================
   petClose.onclick = function(e) {
     e.stopPropagation();
+    if (chatPanel && chatPanel.classList.contains('show')) {
+      chatPanel.classList.remove('show');
+      return;
+    }
     if (window.api && window.api.hidePet) {
       window.api.hidePet();
     } else {

@@ -539,6 +539,42 @@ ipcMain.handle('import-data', async () => {
   }
 });
 
+// ==================== QClaw 星野对话 ====================
+const QCLAW_GATEWAY_URL = 'http://localhost:53717/v1/chat/completions';
+const QCLAW_TOKEN = '9c19b79f500b5bce8054199a05bb2b7b9dc8b37193e1b751';
+
+ipcMain.handle('send-chat-message', async (e, message) => {
+  try {
+    const response = await fetch(QCLAW_GATEWAY_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${QCLAW_TOKEN}`
+      },
+      body: JSON.stringify({
+        model: 'openclaw/main',
+        messages: [{ role: 'user', content: String(message) }],
+        max_tokens: 300
+      })
+    });
+
+    if (!response.ok) {
+      const errText = await response.text().catch(() => 'unknown');
+      safeError('[main] QClaw API error:', response.status, errText);
+      return { success: false, error: `请求失败 (${response.status})` };
+    }
+
+    const data = await response.json();
+    const reply = data.choices?.[0]?.message?.content || '(无回复)';
+    safeLog('[main] 星野回复:', reply.substring(0, 50));
+    return { success: true, reply };
+  } catch (err) {
+    safeError('[main] QClaw 连接失败:', err.message);
+    // QClaw 未运行：返回友好的提示
+    return { success: false, error: 'QClaw 未运行，请先启动星野助手' };
+  }
+});
+
 function applyAutoStart() {
   try {
     const loginArgs = app.isPackaged ? [] : [__dirname];

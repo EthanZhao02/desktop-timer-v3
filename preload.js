@@ -38,4 +38,6 @@ contextBridge.exposeInMainWorld('api', {
   onWindowState: (cb) => ipcRenderer.on('window-state', (e, state) => cb(state)),
   // 锁屏/解锁事件（带睡眠时长）
   onLockEvent: (cb) => ipcRenderer.on('lock-event', (e, data) => cb(data)),
+  // QClaw 星野对话
+  sendChatMessage: (msg) => ipcRenderer.invoke('send-chat-message', msg),
 });
