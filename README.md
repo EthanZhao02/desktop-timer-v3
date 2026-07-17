@@ -143,6 +143,15 @@ desktop-timer-v3/
 
 MIT License · © Ethan智域小店
 
+## 📣 一键分享
+
+[![知乎](https://img.shields.io/badge/-知乎-FF4242?style=flat-square)](https://www.zhihu.com)
+[![小红书](https://img.shields.io/badge/-小红书-FF2442?style=flat-square)](https://www.xiaohongshu.com)
+[![掘金](https://img.shields.io/badge/-掘金-1E90FF?style=flat-square)](https://juejin.cn)
+[![V2EX](https://img.shields.io/badge/-V2EX-1DA1F2?style=flat-square)](https://v2ex.com)
+
+---
+
 **如果你觉得这个项目有意思，点个 ⭐ 支持一下吧！**
 
 ---
@@ -153,4 +162,11 @@ MIT License · © Ethan智域小店
   <a href="https://github.com/EthanZhao02">👤 作者主页</a>
   ·
   <a href="https://ez-3c6.pages.dev">🌐 个人博客</a>
+  ·
+  <a href="https://github.com/EthanZhao02/desktop-timer-v3/releases">📦 下载 exe</a>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/github/downloads/EthanZhao02/desktop-timer-v3/total?style=flat-square&color=6c5ce7" alt="Downloads">
+  <img src="https://img.shields.io/github/last-commit/EthanZhao02/desktop-timer-v3?style=flat-square&color=6c5ce7" alt="Last Commit">
 </p>
