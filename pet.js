@@ -394,9 +394,9 @@ try {
         var h = Math.floor(nearestDiff / 60);
         var m = nearestDiff % 60;
         nextAlarmTime.textContent = nearest.time + " (" + (h > 0 ? h + "小时" : "") + m + "分后)";
-        petStatus.className = "pet-status alarm-active";
+        petStatus.className = "pet-status scheduled";  // 有闹钟设置 = 紫色
       } else {
-        petStatus.className = "pet-status";
+        petStatus.className = "pet-status";  // 默认 = 绿色
         nextAlarmTime.textContent = "--:--";
       }
     } catch (e) {}
@@ -491,8 +491,16 @@ try {
         volcanoInput.value = modelConfigs.volcano.apiKey || '';
       }
       settingsPanel.classList.add('show');
+      // 通知主进程面板已显示，确保置顶
+      if (window.api && window.api.setPanelVisible) {
+        window.api.setPanelVisible(true);
+      }
     } else {
       settingsPanel.classList.remove('show');
+      // 通知主进程面板已隐藏
+      if (window.api && window.api.setPanelVisible) {
+        window.api.setPanelVisible(false);
+      }
     }
   }
 
@@ -517,6 +525,8 @@ try {
       console.log('[Pet] 保存 API Key 失败:', e);
     }
 
+    // 重新加载配置确保同步
+    await loadModelConfigs();
     toggleSettingsPanel(false);
     // 检查当前模型是否需要 API Key
     checkApiKeyNotice();
@@ -646,8 +656,16 @@ try {
     var isVisible = chatPanel.classList.contains('show');
     if (isVisible) {
       chatPanel.classList.remove('show');
+      // 通知主进程面板已隐藏
+      if (window.api && window.api.setPanelVisible) {
+        window.api.setPanelVisible(false);
+      }
     } else {
       chatPanel.classList.add('show');
+      // 通知主进程面板已显示，确保置顶
+      if (window.api && window.api.setPanelVisible) {
+        window.api.setPanelVisible(true);
+      }
       // 首次打开加载配置
       if (Object.keys(modelConfigs).length === 0) {
         loadModelConfigs();
@@ -1017,7 +1035,7 @@ try {
     petImage.classList.add("alarm-shake");
     petBubble.textContent = "⏰ " + label + " 响啦！";
     petBubble.className = "pet-bubble alarm-bubble show";
-    petStatus.className = "pet-status scheduled";
+    petStatus.className = "pet-status alarm-active";  // 闹钟响 = 红色闪烁
 
     // 10秒后停止闹钟状态
     setTimeout(function() {

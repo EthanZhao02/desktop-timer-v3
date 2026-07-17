@@ -44,4 +44,6 @@ contextBridge.exposeInMainWorld('api', {
   // API Key 管理
   getApiKeys: () => ipcRenderer.invoke('get-api-keys'),
   saveApiKeys: (keys) => ipcRenderer.invoke('save-api-keys', keys),
+  // 面板置顶控制
+  setPanelVisible: (visible) => ipcRenderer.send('pet-panel-visible', visible),
 });

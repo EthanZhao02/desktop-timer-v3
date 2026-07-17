@@ -230,12 +230,12 @@ body.alarm-flash {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
+.pet-status.scheduled {
+  background: #6c5ce7;
+}
 .pet-status.alarm-active {
   background: #ff6b6b;
   animation: blink 1s ease-in-out infinite;
-}
-.pet-status.scheduled {
-  background: #6c5ce7;
 }
 
 @keyframes blink {
