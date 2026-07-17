@@ -37,6 +37,7 @@
           </select>
         </div>
         <div class="pet-chat-header-right">
+          <button class="pet-chat-iconbtn" id="petOpenSettings" title="API设置">设置</button>
           <button class="pet-chat-iconbtn" id="petOpenTimer" title="打开计时器">计时器</button>
           <button class="pet-chat-iconbtn" id="petChatClear" title="清空记录" style="display:none">清空</button>
           <button class="pet-chat-close" id="petChatClose" title="关闭">×</button>
@@ -60,6 +61,7 @@
 
       <!-- 输入区域 -->
       <div class="pet-chat-input-area">
+        <div class="pet-chat-status" id="chatStatus" style="display:none"></div>
         <div class="pet-chat-input-row">
           <input class="pet-chat-input" id="petChatInput" type="text" placeholder="和星野说点什么..." maxlength="500" autocomplete="off" />
           <button class="pet-chat-send" id="petChatSend">

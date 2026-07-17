@@ -424,19 +424,19 @@ try {
     if (clickCount === 1) {
       // 等待可能的第二次点击
       clickTimer = setTimeout(function() {
-        // 单击：打开对话面板
+        // 单击：打开计时器
         clickCount = 0;
         petImage.classList.add('ripple');
         setTimeout(function() { petImage.classList.remove('ripple'); }, 600);
-        toggleChatPanel();
+        openTimerWindow();
       }, 250); // 250ms 内双击判定
     } else if (clickCount === 2) {
-      // 双击：打开计时器
+      // 双击：打开对话面板
       clearTimeout(clickTimer);
       clickCount = 0;
       petImage.classList.add('ripple');
       setTimeout(function() { petImage.classList.remove('ripple'); }, 600);
-      openTimerWindow();
+      toggleChatPanel();
     }
   }
 
@@ -671,6 +671,20 @@ try {
     if (el) el.remove();
   }
 
+  // 显示/隐藏输入区状态指示器
+  function showStatus(text, type) {
+    var el = document.getElementById('chatStatus');
+    if (!el) return;
+    el.textContent = text;
+    el.className = 'pet-chat-status ' + (type || '');
+    el.style.display = 'block';
+  }
+  function hideStatus() {
+    var el = document.getElementById('chatStatus');
+    if (!el) return;
+    el.style.display = 'none';
+  }
+
   async function sendChatMessage() {
     if (chatLoading) return;
     var text = (chatInput.value || '').trim();
@@ -686,6 +700,7 @@ try {
     // 显示思考中（带模型名）
     var modelName = currentModel === 'qclaw' ? '星野' : (currentModel === 'deepseek' ? 'DeepSeek' : 'AI');
     addChatMessage(modelName + ' 思考中...', 'thinking');
+    showStatus(modelName + ' 思考中...', '');
 
     try {
       var result;
@@ -707,15 +722,25 @@ try {
           if (chatHistory.length > 20) chatHistory = chatHistory.slice(-20);
           // 保存历史
           saveChatHistory();
+          // 显示完成状态
+          showStatus('已回复', 'done');
+          setTimeout(hideStatus, 3000);
         } else {
           addChatMessage('（没有回复...）', 'ai');
+          showStatus('已回复（无内容）', 'done');
+          setTimeout(hideStatus, 3000);
         }
       } else {
+        clearThinking();
         addChatMessage(result && result.error ? result.error : 'AI 开小差了，稍后再试试~', 'error');
+        showStatus('回复失败', 'error');
+        setTimeout(hideStatus, 3000);
       }
     } catch (err) {
       clearThinking();
       addChatMessage('对话失败: ' + err.message, 'error');
+      showStatus('对话失败', 'error');
+      setTimeout(hideStatus, 3000);
     } finally {
       chatLoading = false;
       chatSendBtn.disabled = false;
@@ -818,6 +843,15 @@ try {
       clearBtn.addEventListener('click', function(e) {
         e.stopPropagation();
         clearChatHistory();
+      });
+    }
+
+    // 设置按钮
+    var settingsBtn = document.getElementById('petOpenSettings');
+    if (settingsBtn) {
+      settingsBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        toggleSettingsPanel(true);
       });
     }
   }

@@ -693,6 +693,30 @@ body.alarm-flash {
   margin-top: 8px;
 }
 
+/* 对话状态指示器 */
+.pet-chat-status {
+  text-align: center;
+  font-size: 11px;
+  color: rgba(162,155,254,0.8);
+  padding: 4px 0 2px;
+  animation: statusPulse 1.5s ease-in-out infinite;
+}
+
+.pet-chat-status.done {
+  color: rgba(63,185,80,0.8);
+  animation: none;
+}
+
+.pet-chat-status.error {
+  color: rgba(255,138,138,0.9);
+  animation: none;
+}
+
+@keyframes statusPulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
 /* API 提示条 */
 .pet-chat-api-notice {
   background: rgba(255,107,107,0.15);
