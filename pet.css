@@ -419,36 +419,37 @@ body.alarm-flash {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 14px;
+  padding: 10px 12px;
   background: linear-gradient(90deg, rgba(108,92,231,0.15) 0%, rgba(108,92,231,0.05) 100%);
   border-bottom: 1px solid rgba(108,92,231,0.2);
   -webkit-app-region: no-drag;
-  gap: 8px;
+  gap: 6px;
 }
 
 .pet-chat-header-left {
-  flex: 1;
-  min-width: 0;
+  flex: 0 0 auto;
 }
 
 .pet-chat-header-right {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
 /* 模型选择器 */
 .pet-chat-model {
   background: rgba(0,0,0,0.3);
   border: 1px solid rgba(108,92,231,0.3);
-  border-radius: 8px;
+  border-radius: 6px;
   color: #b8b3e0;
-  font-size: 12px;
-  padding: 5px 8px;
+  font-size: 11px;
+  padding: 4px 6px;
   outline: none;
   cursor: pointer;
   font-family: inherit;
-  max-width: 140px;
+  width: 90px;
+  flex-shrink: 0;
 }
 
 .pet-chat-model:hover {
@@ -468,18 +469,19 @@ body.alarm-flash {
 .pet-chat-iconbtn {
   background: rgba(255,255,255,0.06);
   border: none;
-  border-radius: 8px;
+  border-radius: 6px;
   color: #a29bfe;
   cursor: pointer;
-  font-size: 12px;
-  padding: 0 10px;
-  height: 28px;
+  font-size: 11px;
+  padding: 0 8px;
+  height: 26px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   transition: all 0.15s ease;
   -webkit-app-region: no-drag;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .pet-chat-iconbtn:hover {
@@ -491,17 +493,18 @@ body.alarm-flash {
 .pet-chat-close {
   background: rgba(255,255,255,0.06);
   border: none;
-  border-radius: 8px;
+  border-radius: 6px;
   color: #888;
   cursor: pointer;
-  font-size: 16px;
-  width: 28px;
-  height: 28px;
+  font-size: 14px;
+  width: 26px;
+  height: 26px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   transition: all 0.15s ease;
   -webkit-app-region: no-drag;
+  flex-shrink: 0;
 }
 
 .pet-chat-close:hover {
