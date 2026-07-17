@@ -597,7 +597,6 @@ try {
     var btn = document.getElementById('petChatClear');
     if (btn) btn.style.display = chatHistory.length > 0 ? 'inline-flex' : 'none';
   }
-  }
 
   // 绑定对话事件
   if (chatSendBtn) chatSendBtn.addEventListener('click', sendChatMessage);
