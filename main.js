@@ -1,8 +1,14 @@
 // Desktop Timer + Pet (Electron)
 // Main process: manages main window, pet window, tray, and alarms
+// 屏蔽 EPIPE broken pipe 无害弹窗
+process.stdout.on('error', (e) => { if (e.code === 'EPIPE') return; });
+process.stderr.on('error', (e) => { if (e.code === 'EPIPE') return; });
+
 const { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, screen, Notification, powerSaveBlocker, dialog, globalShortcut } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
+const { execFile } = require('child_process');
 const { fileURLToPath } = require('url');
 const {
   DEFAULT_DATA,
@@ -118,8 +124,6 @@ let autoStartEnabled = data.settings.autoStartEnabled !== false;
 let keepAliveEnabled = data.settings.keepAliveEnabled !== false;
 const PET_WINDOW_WIDTH = 280;
 const PET_WINDOW_HEIGHT = 340;
-let petMouseEventsEnabled = true;
-
 function getDefaultRingtoneSrc() {
   return 'file:///' + path.join(__dirname, 'assets', 'default-ringtone.wav').replace(/\\/g, '/');
 }
@@ -228,7 +232,6 @@ function createPetWindow() {
   const sw = display.workAreaSize.width;
   const sh = display.workAreaSize.height;
   safeLog('[main] createPetWindow called, screen=' + sw + 'x' + sh);
-  petMouseEventsEnabled = true;
 
   petWindow = new BrowserWindow({
     width: PET_WINDOW_WIDTH,
@@ -258,25 +261,17 @@ function createPetWindow() {
   });
 
   petWindow.loadFile('pet.html');
+  petWindow.on('will-resize', (event) => { event.preventDefault(); });
   petWindow.once('ready-to-show', () => {
     petWindow.show();
-    setPetMouseEventsEnabled(false);
+    petWindow.setSize(PET_WINDOW_WIDTH, PET_WINDOW_HEIGHT, false);
     safeLog('[main] pet window shown');
   });
   petWindow.webContents.on('did-fail-load', (e, code, desc) => {
     safeError('[main] pet window load failed:', code, desc);
   });
 
-  // Transparent windows must never be enlarged by OS snap/maximize gestures.
-  // The fixed canvas includes room for bubbles and effects, so clamping stays
-  // predictable while dragging near screen edges.
   petWindow.on('maximize', () => petWindow.unmaximize());
-  petWindow.on('resize', () => {
-    const bounds = petWindow.getBounds();
-    if (bounds.width !== PET_WINDOW_WIDTH || bounds.height !== PET_WINDOW_HEIGHT) {
-      petWindow.setSize(PET_WINDOW_WIDTH, PET_WINDOW_HEIGHT, false);
-    }
-  });
 
   petWindow.on('close', (e) => {
     if (!isQuitting) {
@@ -284,14 +279,6 @@ function createPetWindow() {
       petWindow.hide();
     }
   });
-}
-
-function setPetMouseEventsEnabled(enabled) {
-  if (!petWindow || petWindow.isDestroyed()) return;
-  const next = enabled === true;
-  if (petMouseEventsEnabled === next) return;
-  petMouseEventsEnabled = next;
-  petWindow.setIgnoreMouseEvents(!next, { forward: true });
 }
 
 function buildTrayMenu() {
@@ -486,6 +473,7 @@ ipcMain.handle('show-notification', (e, payload) => {
 });
 ipcMain.handle('hide-pet', () => { if (petWindow) petWindow.hide(); });
 ipcMain.handle('show-main', () => showMainWindow());
+ipcMain.handle('set-window-pos', (e, x, y) => { if (petWindow) petWindow.setPosition(x, y); return true; });
 ipcMain.handle('minimize-to-pet', () => {
   // 收纳到宠物：隐藏主窗口 + 确保宠物窗口可见
   if (mainWindow) mainWindow.hide();
@@ -497,22 +485,6 @@ ipcMain.handle('minimize-to-pet', () => {
   return true;
 });
 ipcMain.handle('quit-app', () => { isQuitting = true; app.quit(); });
-ipcMain.on('set-pet-mouse-events', (event, enabled) => {
-  if (!petWindow || petWindow.isDestroyed() || event.sender !== petWindow.webContents) return;
-  setPetMouseEventsEnabled(enabled === true);
-});
-ipcMain.on('move-pet-to', (event, x, y) => {
-  if (!petWindow || petWindow.isDestroyed()) return;
-  const targetX = Number(x);
-  const targetY = Number(y);
-  if (!Number.isFinite(targetX) || !Number.isFinite(targetY)) return;
-  const bounds = petWindow.getBounds();
-  const target = { x: targetX, y: targetY };
-  const display = screen.getDisplayNearestPoint(target);
-  const next = clampWindowPosition(target.x, target.y, bounds.width, bounds.height, display.workArea);
-  petWindow.setPosition(next.x, next.y, false);
-});
-
 // ==================== 主题同步 ====================
 ipcMain.handle('set-theme', (e, theme) => {
   broadcast('theme-changed', theme);
@@ -604,6 +576,152 @@ function applyKeepAlive() {
   }
 }
 
+// ==================== 活动窗口 & 空闲检测 ====================
+let windowStateScriptPath = null;
+let lastWindowState = '';
+let windowStateInterval = null;
+let isScreenLocked = false;
+
+function setupWindowStateMonitor() {
+  // PowerShell 脚本：获取前台窗口标题、进程名、空闲时间
+  const psScript = `
+$ErrorActionPreference = 'SilentlyContinue'
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public class Win32Monitor {
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+  [DllImport("user32.dll")] public static extern bool GetLastInputInfo(ref LASTINPUTINFO plii);
+  [StructLayout(LayoutKind.Sequential)] public struct LASTINPUTINFO { public uint cbSize; public uint dwTime; }
+}
+"@
+$hwnd = [Win32Monitor]::GetForegroundWindow()
+$pid1 = [uint32]0
+[Win32Monitor]::GetWindowThreadProcessId($hwnd, [ref]$pid1) | Out-Null
+$p = Get-Process -Id $pid1 -ErrorAction SilentlyContinue
+$title = if ($p -and $p.MainWindowTitle) { $p.MainWindowTitle } else { '' }
+$pname = if ($p) { $p.ProcessName } else { 'unknown' }
+$lii = New-Object Win32Monitor+LASTINPUTINFO
+$lii.cbSize = [System.Runtime.InteropServices.Marshal]::SizeOf($lii)
+[Win32Monitor]::GetLastInputInfo([ref]$lii) | Out-Null
+$idleMs = [Environment]::TickCount - [int]$lii.dwTime
+if ($idleMs -lt 0) { $idleMs = 0 }
+Write-Output "$pname|$title|$idleMs"
+`.trim();
+
+  try {
+    windowStateScriptPath = path.join(os.tmpdir(), 'zhiyu-window-state.ps1');
+    fs.writeFileSync(windowStateScriptPath, psScript, 'utf-8');
+    safeLog('[main] Window state script written to ' + windowStateScriptPath);
+  } catch (e) {
+    safeError('[main] Failed to write window state script:', e);
+    return;
+  }
+
+  function pollWindowState() {
+    if (!windowStateScriptPath) return;
+    execFile('powershell.exe', [
+      '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
+      '-File', windowStateScriptPath
+    ], { timeout: 5000, windowsHide: true }, (err, stdout) => {
+      if (err || !stdout) return;
+      const line = stdout.trim();
+      if (line === lastWindowState) return; // 无变化，跳过
+      lastWindowState = line;
+
+      const parts = line.split('|');
+      const state = {
+        process: (parts[0] || 'unknown').toLowerCase(),
+        title: parts[1] || '',
+        idleMs: parseInt(parts[2]) || 0,
+        locked: isScreenLocked
+      };
+
+      // 推送到宠物窗口
+      if (petWindow && !petWindow.isDestroyed()) {
+        petWindow.webContents.send('window-state', state);
+      }
+    });
+  }
+
+  // 每5秒检测一次
+  windowStateInterval = setInterval(pollWindowState, 5000);
+  // 立即执行一次
+  setTimeout(pollWindowState, 2000);
+  safeLog('[main] Window state monitor started (5s interval)');
+}
+
+// 锁屏检测（Windows session lock/unlock）
+function setupLockDetection() {
+  try {
+    const { powerMonitor, Notification } = require('electron');
+    let lockTime = null; // 记录锁屏时间（算睡眠时长）
+
+    powerMonitor.on('lock-screen', () => {
+      isScreenLocked = true;
+      lockTime = Date.now();
+      safeLog('[main] Screen locked');
+
+      // 系统 Toast 通知
+      try {
+        new Notification({
+          title: '🌙 主人晚安~',
+          body: 'Zzz... 我先睡一会儿',
+          silent: true,
+          timeoutType: 'default'
+        }).show();
+      } catch (e) { safeError('[main] Lock notification error:', e); }
+
+      if (petWindow && !petWindow.isDestroyed()) {
+        petWindow.webContents.send('window-state', {
+          process: 'lockscreen', title: '', idleMs: 0, locked: true
+        });
+        petWindow.webContents.send('lock-event', { type: 'locked', time: lockTime });
+      }
+    });
+
+    powerMonitor.on('unlock-screen', () => {
+      isScreenLocked = false;
+      safeLog('[main] Screen unlocked');
+      lastWindowState = ''; // 强制下次轮询更新
+
+      // 计算睡眠时长，弹解锁通知
+      try {
+        let sleepStr = '';
+        if (lockTime) {
+          const sleepMs = Date.now() - lockTime;
+          const sleepMin = Math.round(sleepMs / 60000);
+          if (sleepMin >= 60) {
+            const h = Math.floor(sleepMin / 60);
+            const m = sleepMin % 60;
+            sleepStr = `我刚睡了 ${h} 小时${m > 0 ? m + ' 分钟' : ''}~`;
+          } else if (sleepMin >= 2) {
+            sleepStr = `我刚睡了 ${sleepMin} 分钟~`;
+          } else if (sleepMin >= 1) {
+            sleepStr = '刚打了个盹~';
+          }
+        }
+        new Notification({
+          title: '☀️ 主人回来啦',
+          body: sleepStr || '欢迎回来~',
+          silent: true,
+          timeoutType: 'default'
+        }).show();
+      } catch (e) { safeError('[main] Unlock notification error:', e); }
+
+      if (petWindow && !petWindow.isDestroyed()) {
+        petWindow.webContents.send('window-state', { process: '', title: '', idleMs: 0, locked: false });
+        petWindow.webContents.send('lock-event', { type: 'unlocked', time: lockTime });
+      }
+      lockTime = null;
+    });
+    safeLog('[main] Lock screen detection registered');
+  } catch (e) {
+    safeError('[main] powerMonitor lock detection failed:', e);
+  }
+}
+
 app.whenReady().then(() => {
   applyAutoStart();
   applyKeepAlive();
@@ -611,6 +729,8 @@ app.whenReady().then(() => {
   createPetWindow();
   createTray();
   startAlarmChecker();
+  setupWindowStateMonitor();
+  setupLockDetection();
 
   // 全局快捷键 Ctrl+Shift+T 呼出主窗口
   try {

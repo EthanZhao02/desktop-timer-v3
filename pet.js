@@ -5,81 +5,338 @@ window.onerror = function(msg, url, line) {
 };
 
 try {
-  var petContainer = document.getElementById("petContainer");
   var petImage = document.getElementById("petImage");
+  var petImg = document.getElementById("petImg");
   var petTime = document.getElementById("petTime");
   var petBubble = document.getElementById("petBubble");
   var petStatus = document.getElementById("petStatus");
   var petClose = document.getElementById("petClose");
   var miniInfo = document.getElementById("miniInfo");
   var nextAlarmTime = document.getElementById("nextAlarmTime");
-  var dragHint = document.querySelector(".drag-hint");
 
-  // ==================== 透明窗口点击穿透 ====================
-  var petMouseEventsEnabled = null;
-  var petControlsVisible = false;
-  var dragPointerId = null;
-  var dragStartScreenX = 0;
-  var dragStartScreenY = 0;
-  var dragWindowX = 0;
-  var dragWindowY = 0;
-  var imgDragMoved = false;
+  // ==================== 多姿态系统 ====================
+  var POSES = {
+    idle:        "assets/pet-idle.png",
+    laptop:      "assets/pet-laptop.png",
+    reading:     "assets/pet-reading.png",
+    coffee:      "assets/pet-coffee.png",
+    sleeping:    "assets/pet-sleeping.png",
+    thinking:    "assets/pet-thinking.png",
+    celebrating: "assets/pet-celebrating.png",
+    walking:     "assets/pet-walking.png",
+    phone:       "assets/pet-phone.png",
+    writing:     "assets/pet-writing.png",
+    music:       "assets/pet-music.png",
+    peeking:     "assets/pet-peeking.png"
+  };
 
-  function pointHitsElement(x, y, element, padding) {
-    if (!element) return false;
-    var style = window.getComputedStyle(element);
-    if (style.display === "none" || style.visibility === "hidden") return false;
-    var rect = element.getBoundingClientRect();
-    var pad = padding || 0;
-    if (rect.width <= 0 || rect.height <= 0) return false;
-    return x >= rect.left - pad &&
-      x <= rect.right + pad &&
-      y >= rect.top - pad &&
-      y <= rect.bottom + pad;
+  // 姿态分类
+  var idlePoses = ["idle", "reading", "coffee", "thinking", "phone", "music"];
+  var workPoses = ["laptop", "writing"];
+  var specialPoses = ["walking", "peeking"];
+
+  // 姿态对应气泡文字
+  var poseBubbles = {
+    idle:        "",
+    laptop:      "认真工作中...",
+    reading:     "充充电~",
+    coffee:      "来杯咖啡",
+    sleeping:    "Zzz...",
+    thinking:    "在想什么呢...",
+    celebrating: "",
+    walking:     "出去走走~",
+    phone:       "刷一会儿",
+    writing:     "记笔记中...",
+    music:       "♪ 听歌放松 ♪",
+    peeking:     "偷偷看你~"
+  };
+
+  var currentPose = "idle";
+  var isAlarmActive = false;
+  var poseTimer = null;
+  var bubblePoseTimer = null;
+
+  // 预加载所有图片（确保切换无延迟）
+  var preloadedImages = {};
+  Object.keys(POSES).forEach(function(key) {
+    var img = new Image();
+    img.src = POSES[key];
+    preloadedImages[key] = img;
+  });
+
+  // 切换姿态（带淡入淡出过渡）
+  function switchPose(poseName) {
+    if (isAlarmActive && poseName !== "celebrating") return;
+    if (!POSES[poseName]) return;
+    if (poseName === currentPose && !isAlarmActive) return;
+
+    currentPose = poseName;
+    // 淡出
+    petImg.style.opacity = "0";
+
+    setTimeout(function() {
+      petImg.src = POSES[poseName];
+      // 淡入
+      petImg.style.opacity = "1";
+
+      // 显示姿态气泡
+      clearTimeout(bubblePoseTimer);
+      var bubble = poseBubbles[poseName];
+      if (bubble && !isAlarmActive) {
+        petBubble.textContent = bubble;
+        petBubble.className = "pet-bubble show";
+        bubblePoseTimer = setTimeout(function() {
+          if (!isAlarmActive) petBubble.className = "pet-bubble";
+        }, 3500);
+      }
+    }, 280);
+
+    console.log("[Pet] Pose -> " + poseName);
   }
 
-  function setPetControlsVisible(visible) {
-    var next = visible === true;
-    if (petControlsVisible === next) return;
-    petControlsVisible = next;
-    petContainer.classList.toggle("controls-visible", next);
+  // 随机选取一个姿态（排除当前）
+  function randomPick(arr) {
+    var filtered = arr.filter(function(p) { return p !== currentPose; });
+    if (filtered.length === 0) filtered = arr;
+    return filtered[Math.floor(Math.random() * filtered.length)];
   }
 
-  function shouldShowPetControls(x, y) {
-    if (dragPointerId !== null) return false;
-    return pointHitsElement(x, y, petImage) ||
-      pointHitsElement(x, y, petTime) ||
-      (petControlsVisible && pointHitsElement(x, y, petClose)) ||
-      pointHitsElement(x, y, miniInfo) ||
-      pointHitsElement(x, y, petBubble);
-  }
+  // 自动姿态切换（基于时间 + 随机）
+  function autoSwitchPose() {
+    if (isAlarmActive) return;
 
-  function setPetMouseEvents(enabled) {
-    var next = enabled === true;
-    if (petMouseEventsEnabled === next) return;
-    petMouseEventsEnabled = next;
-    if (window.api && window.api.setPetMouseEvents) {
-      window.api.setPetMouseEvents(next);
-    }
-  }
+    var now = new Date();
+    var hour = now.getHours();
+    var day = now.getDay(); // 0=Sunday
 
-  function updatePetMouseEvents(e) {
-    if (!e) {
-      setPetControlsVisible(false);
-      setPetMouseEvents(false);
+    // 深夜 (0:00-6:00): 睡觉
+    if (hour >= 0 && hour < 6) {
+      switchPose("sleeping");
+      schedulePoseTimer(40000 + Math.random() * 20000);
       return;
     }
-    var controlsVisible = shouldShowPetControls(e.clientX, e.clientY);
-    setPetControlsVisible(controlsVisible);
-    setPetMouseEvents(controlsVisible || pointHitsElement(e.clientX, e.clientY, dragHint));
+
+    // 清晨 (6:00-8:00): 咖啡或走路
+    if (hour >= 6 && hour < 8) {
+      var morningPoses = ["coffee", "walking", "idle", "phone"];
+      switchPose(randomPick(morningPoses));
+      schedulePoseTimer(25000 + Math.random() * 15000);
+      return;
+    }
+
+    // 工作时间 (8:00-18:00 工作日): 混合工作和休闲
+    if (hour >= 8 && hour < 18 && day >= 1 && day <= 5) {
+      var r = Math.random();
+      if (r < 0.35) {
+        // 35% 工作姿态
+        switchPose(randomPick(workPoses));
+      } else if (r < 0.45) {
+        // 10% 特殊姿态（彩蛋）
+        switchPose(randomPick(specialPoses));
+      } else {
+        // 55% 休闲待机
+        switchPose(randomPick(idlePoses));
+      }
+      schedulePoseTimer(20000 + Math.random() * 20000);
+      return;
+    }
+
+    // 晚间/周末: 以休闲为主，偶尔特殊
+    var eveningR = Math.random();
+    if (eveningR < 0.12) {
+      switchPose(randomPick(specialPoses));
+    } else if (eveningR < 0.25) {
+      switchPose("music");
+    } else {
+      switchPose(randomPick(idlePoses));
+    }
+    schedulePoseTimer(22000 + Math.random() * 18000);
   }
 
-  document.addEventListener("mousemove", updatePetMouseEvents);
-  document.addEventListener("mouseleave", function() {
-    if (dragPointerId === null) {
-      setPetControlsVisible(false);
-      setPetMouseEvents(false);
+  function schedulePoseTimer(ms) {
+    clearTimeout(poseTimer);
+    poseTimer = setTimeout(autoSwitchPose, ms);
+  }
+
+  // ==================== 实时状态检测 ====================
+  var windowStateActive = false; // 标记是否正在使用实时检测
+  var windowStateTimer = null;
+
+  // 进程名 → 姿态映射
+  var processPoseMap = {
+    // 聊天应用
+    "wechat": { pose: "phone", bubble: "在微信聊天..." },
+    "weixin": { pose: "phone", bubble: "在微信聊天..." },
+    "qq": { pose: "phone", bubble: "QQ聊天中..." },
+    "telegram": { pose: "phone", bubble: "Telegram聊天..." },
+    "dingtalk": { pose: "phone", bubble: "钉钉沟通中..." },
+    "lark": { pose: "phone", bubble: "飞书沟通中..." },
+    "discord": { pose: "phone", bubble: "Discord聊天..." },
+    // 浏览器
+    "chrome": { pose: "reading", bubble: "浏览网页中..." },
+    "firefox": { pose: "reading", bubble: "浏览网页中..." },
+    "msedge": { pose: "reading", bubble: "浏览网页中..." },
+    "opera": { pose: "reading", bubble: "浏览网页中..." },
+    "brave": { pose: "reading", bubble: "浏览网页中..." },
+    // 视频/音乐
+    "potplayer": { pose: "music", bubble: "♪ 看视频中 ♪" },
+    "vlc": { pose: "music", bubble: "♪ 看视频中 ♪" },
+    "spotify": { pose: "music", bubble: "♪ 听歌中 ♪" },
+    "cloudmusic": { pose: "music", bubble: "♪ 网易云音乐 ♪" },
+    "kuwo": { pose: "music", bubble: "♪ 听音乐中 ♪" },
+    "kugou": { pose: "music", bubble: "♪ 听音乐中 ♪" },
+    "bilibili": { pose: "reading", bubble: "刷B站中..." },
+    // 办公/编辑器
+    "code": { pose: "laptop", bubble: "VSCode 编程中..." },
+    "cursor": { pose: "laptop", bubble: "Cursor 编程中..." },
+    "webstorm": { pose: "laptop", bubble: "编程中..." },
+    "intellij": { pose: "laptop", bubble: "编程中..." },
+    "pycharm": { pose: "laptop", bubble: "Python编程中..." },
+    "winword": { pose: "writing", bubble: "Word 写文档..." },
+    "excel": { pose: "writing", bubble: "Excel 做表..." },
+    "powerpnt": { pose: "writing", bubble: "PPT 制作中..." },
+    "notepad": { pose: "writing", bubble: "记笔记中..." },
+    "onenote": { pose: "writing", bubble: "OneNote笔记..." },
+    // 设计
+    "photoshop": { pose: "thinking", bubble: "PS 设计中..." },
+    "figma": { pose: "thinking", bubble: "Figma 设计中..." },
+    "illustrator": { pose: "thinking", bubble: "AI 设计中..." },
+    // 锁屏
+    "lockscreen": { pose: "sleeping", bubble: "Zzz..." },
+    "lockapp": { pose: "sleeping", bubble: "Zzz..." }
+  };
+
+  function handleWindowState(state) {
+    if (isAlarmActive) return;
+
+    windowStateActive = true;
+    clearTimeout(poseTimer);
+
+    var proc = (state.process || '').toLowerCase().replace(/\.exe$/i, '');
+    var idleMs = state.idleMs || 0;
+    var locked = state.locked || false;
+
+    // 锁屏 → 睡觉
+    if (locked || proc === 'lockscreen' || proc === 'lockapp') {
+      switchPoseWithBubble("sleeping", "Zzz... (锁屏中)");
+      return;
     }
+
+    // 空闲超过5分钟 → 睡觉
+    if (idleMs > 300000) {
+      switchPoseWithBubble("sleeping", "Zzz... (发呆中)");
+      return;
+    }
+
+    // 空闲超过2分钟 → 思考
+    if (idleMs > 120000) {
+      switchPoseWithBubble("thinking", "发呆中...");
+      return;
+    }
+
+    // 根据进程名匹配姿态
+    var matched = null;
+    var keys = Object.keys(processPoseMap);
+    for (var i = 0; i < keys.length; i++) {
+      if (proc.indexOf(keys[i]) !== -1) {
+        matched = processPoseMap[keys[i]];
+        break;
+      }
+    }
+
+    if (matched) {
+      switchPoseWithBubble(matched.pose, matched.bubble);
+    } else {
+      // 未知程序：随机休闲（不频繁切换）
+      if (currentPose !== "idle" && currentPose !== "reading" && currentPose !== "coffee") {
+        switchPose(randomPick(idlePoses));
+      }
+    }
+
+    // 设置超时：如果15秒没有新状态，恢复自动切换
+    clearTimeout(windowStateTimer);
+    windowStateTimer = setTimeout(function() {
+      windowStateActive = false;
+      autoSwitchPose();
+    }, 15000);
+  }
+
+  // 带气泡的姿态切换
+  function switchPoseWithBubble(poseName, bubble) {
+    if (poseName === currentPose) return;
+    switchPose(poseName);
+    if (bubble && !isAlarmActive) {
+      clearTimeout(bubblePoseTimer);
+      setTimeout(function() {
+        petBubble.textContent = bubble;
+        petBubble.className = "pet-bubble show";
+        bubblePoseTimer = setTimeout(function() {
+          if (!isAlarmActive) petBubble.className = "pet-bubble";
+        }, 4000);
+      }, 300);
+    }
+  }
+
+  // ==================== JS拖动（无webkit-app-region: drag干扰点击和动画）====================
+  petImage.style['-webkit-app-region'] = 'no-drag';
+  petImage.style.cursor = 'grab';
+
+  var dragging = false;
+  var dragStartX = 0, dragStartY = 0;
+  var winStartX = 0, winStartY = 0;
+  var hasDragged = false;
+
+  petImage.addEventListener('pointerdown', function(e) {
+    if (e.button !== 0) return;
+    dragging = true;
+    hasDragged = false;
+    dragStartX = e.clientX;
+    dragStartY = e.clientY;
+    winStartX = window.screenX;
+    winStartY = window.screenY;
+    petImage.setPointerCapture(e.pointerId);
+    petImage.style.cursor = 'grabbing';
+    // 拖动开始：隐藏浮动元素
+    if (miniInfo) miniInfo.className = 'mini-info';
+    if (petBubble) petBubble.className = 'pet-bubble';
+    petImage.style.animationPlayState = 'paused';
+    document.body.style.cursor = 'grabbing';
+    e.preventDefault();
+  });
+
+  petImage.addEventListener('pointermove', function(e) {
+    if (!dragging) return;
+    var dx = e.clientX - dragStartX;
+    var dy = e.clientY - dragStartY;
+    if (hasDragged) {
+      var newX = winStartX + dx;
+      var newY = winStartY + dy;
+      if (window.api && window.api.setWindowPos) {
+        window.api.setWindowPos(newX, newY);
+      }
+    } else if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+      hasDragged = true;
+    }
+  });
+
+  petImage.addEventListener('pointerup', function(e) {
+    if (!dragging) return;
+    dragging = false;
+    petImage.style.cursor = 'grab';
+    document.body.style.cursor = '';
+    if (!hasDragged) {
+      handlePetClick();
+    } else {
+      // 拖动结束，恢复动画
+      petImage.style.animationPlayState = '';
+    }
+  });
+
+  petImage.addEventListener('pointercancel', function() {
+    dragging = false;
+    petImage.style.cursor = 'grab';
+    document.body.style.cursor = '';
+    petImage.style.animationPlayState = '';
   });
 
   // ==================== 时间显示 ====================
@@ -108,7 +365,6 @@ try {
         return;
       }
 
-      // 找到下一个最近的闹钟
       var now = new Date();
       var currentMinutes = now.getHours() * 60 + now.getMinutes();
       var nearest = null;
@@ -120,7 +376,7 @@ try {
         var parts = alarm.time.split(":");
         var alarmMinutes = parseInt(parts[0]) * 60 + parseInt(parts[1]);
         var diff = alarmMinutes - currentMinutes;
-        if (diff < 0) diff += 24 * 60; // 跨天
+        if (diff < 0) diff += 24 * 60;
         if (diff < nearestDiff) {
           nearestDiff = diff;
           nearest = alarm;
@@ -142,7 +398,6 @@ try {
   // ==================== 鼠标悬停提示 ====================
   var bubbleTimer = null;
   petImage.onmouseenter = function() {
-    if (dragPointerId !== null) return;
     clearTimeout(bubbleTimer);
     miniInfo.className = "mini-info show";
   };
@@ -153,33 +408,20 @@ try {
   };
 
   // ==================== 点击展开计时器 ====================
-  petImage.onclick = async function(e) {
-    if (e && e.stopPropagation) e.stopPropagation();
-    if (imgDragMoved) return;
-
-    // 涟漪效果
+  async function handlePetClick() {
     petImage.classList.add('ripple');
     setTimeout(function() { petImage.classList.remove('ripple'); }, 600);
-
-    // 尝试打开主窗口
     try {
-      // 优先通过 IPC 通知主进程显示已有主窗口（避免重复开窗）
       if (window.api && window.api.showMain) {
         await window.api.showMain();
         return;
       }
-
-      // 兜底（纯浏览器 PWA 模式）：只聚焦现有窗口，绝不用 window.open 开新窗
-      var mainWin = window.opener;
-      if (mainWin && !mainWin.closed) {
-        mainWin.focus();
-        return;
-      }
       showMessage("请手动打开主计时器窗口");
     } catch (err) {
-      console.error("打开主窗口失败:", err);
+      console.error("[Pet] 打开主窗口失败:", err);
+      showMessage("点击打开主窗口失败: " + err.message);
     }
-  };
+  }
 
   // ==================== 关闭按钮 ====================
   petClose.onclick = function(e) {
@@ -190,76 +432,6 @@ try {
       window.close();
     }
   };
-
-  // ==================== 拖动功能 ====================
-  function isDragHandle(target) {
-    return target === petImage ||
-      petImage.contains(target) ||
-      target === petTime ||
-      petTime.contains(target) ||
-      target === miniInfo ||
-      miniInfo.contains(target) ||
-      target === petBubble ||
-      petBubble.contains(target) ||
-      target === dragHint;
-  }
-
-  function canStartDrag(e) {
-    if (e.target === petClose || petClose.contains(e.target)) return false;
-    return isDragHandle(e.target) ||
-      pointHitsElement(e.clientX, e.clientY, petImage) ||
-      pointHitsElement(e.clientX, e.clientY, petTime);
-  }
-
-  petContainer.onpointerdown = function(e) {
-    if (e.button !== 0 || !canStartDrag(e)) return;
-    dragPointerId = e.pointerId;
-    dragStartScreenX = e.screenX;
-    dragStartScreenY = e.screenY;
-    dragWindowX = window.screenX;
-    dragWindowY = window.screenY;
-    imgDragMoved = false;
-    setPetMouseEvents(true);
-    setPetControlsVisible(false);
-    petContainer.setPointerCapture(e.pointerId);
-    petContainer.classList.add("dragging");
-    petContainer.style.cursor = "grabbing";
-    miniInfo.className = "mini-info";
-  };
-
-  petContainer.onpointermove = function(e) {
-    if (e.pointerId !== dragPointerId) return;
-    var dx = e.screenX - dragStartScreenX;
-    var dy = e.screenY - dragStartScreenY;
-    if (Math.abs(dx) <= 5 && Math.abs(dy) <= 5) return;
-    imgDragMoved = true;
-    if (window.api && window.api.movePetTo) {
-      window.api.movePetTo(dragWindowX + dx, dragWindowY + dy);
-    }
-  };
-
-  function finishDrag(e) {
-    if (dragPointerId === null || (e && e.pointerId !== dragPointerId)) return;
-    if (imgDragMoved) {
-      // 第一次拖动后隐藏提示
-      var hint = document.querySelector(".drag-hint");
-      if (hint) hint.style.display = "none";
-    }
-    if (petContainer.hasPointerCapture(dragPointerId)) {
-      petContainer.releasePointerCapture(dragPointerId);
-    }
-    dragPointerId = null;
-    petContainer.classList.remove("dragging");
-    petContainer.style.cursor = "default";
-    setTimeout(function() {
-      imgDragMoved = false;
-      updatePetMouseEvents(e);
-    }, 0);
-  }
-
-  petContainer.onpointerup = finishDrag;
-  petContainer.onpointercancel = finishDrag;
-  window.addEventListener("blur", function() { finishDrag(); });
 
   // ==================== 临时消息 ====================
   function showMessage(msg) {
@@ -272,6 +444,10 @@ try {
 
   // ==================== 初始化 ====================
   function init() {
+    // 设置初始图片
+    petImg.src = POSES.idle;
+    petImg.style.transition = "opacity 0.28s ease";
+
     updateTime();
     setInterval(updateTime, 1000);
     checkAlarms();
@@ -287,6 +463,55 @@ try {
       });
     }
 
+    // 实时活动窗口状态检测（IPC 推送）
+    if (window.api && window.api.onWindowState) {
+      window.api.onWindowState(function(state) {
+        console.log("[Pet] Window state ->", state);
+        handleWindowState(state);
+      });
+      console.log("[Pet] 实时状态检测已启用");
+    }
+
+    // 锁屏/解锁宠物反应（气泡 + 特殊动画）
+    if (window.api && window.api.onLockEvent) {
+      window.api.onLockEvent(function(data) {
+        console.log("[Pet] Lock event ->", data);
+        if (data.type === 'locked') {
+          // 锁屏：切到睡觉 + 气泡
+          clearTimeout(poseTimer);
+          isAlarmActive = false; // 解锁闹钟锁定
+          switchPose('sleeping');
+          petBubble.textContent = '主人晚安~ Zzz';
+          petBubble.className = 'pet-bubble show';
+          clearTimeout(bubblePoseTimer);
+          bubblePoseTimer = setTimeout(function() {
+            petBubble.className = 'pet-bubble';
+          }, 5000);
+        } else if (data.type === 'unlocked') {
+          // 解锁：切到 idle + 欢迎气泡
+          isAlarmActive = false;
+          autoSwitchPose();
+          var sleepMs = data.time ? (Date.now() - data.time) : 0;
+          var sleepMin = Math.round(sleepMs / 60000);
+          var msg = '主人回来啦~';
+          if (sleepMin >= 60) {
+            var h = Math.floor(sleepMin / 60);
+            var m = sleepMin % 60;
+            msg = '主人回来啦~ 我睡了好久' + (m > 0 ? ' (' + h + 'h' + m + 'm)' : ' (' + h + 'h)');
+          } else if (sleepMin >= 2) {
+            msg = '主人回来啦~ 我刚睡了 ' + sleepMin + ' 分钟';
+          }
+          petBubble.textContent = msg;
+          petBubble.className = 'pet-bubble show';
+          clearTimeout(bubblePoseTimer);
+          bubblePoseTimer = setTimeout(function() {
+            petBubble.className = 'pet-bubble';
+          }, 5000);
+        }
+      });
+      console.log("[Pet] 锁屏/解锁检测已启用");
+    }
+
     // 主题同步
     if (window.api && window.api.onThemeChanged) {
       window.api.onThemeChanged(function(theme) {
@@ -294,13 +519,17 @@ try {
         try { localStorage.setItem("zhiyu-theme", theme); } catch (e) {}
       });
     }
-    // 读取保存的主题
     try {
       var savedTheme = localStorage.getItem("zhiyu-theme");
       if (savedTheme) document.documentElement.setAttribute("data-theme", savedTheme);
     } catch (e) {}
 
-    // 5秒后显示欢迎气泡
+    // 启动自动姿态切换（5秒后开始，给预加载时间）
+    setTimeout(function() {
+      autoSwitchPose();
+    }, 5000);
+
+    // 欢迎气泡
     setTimeout(function() {
       petBubble.textContent = "点击我打开计时器！";
       petBubble.className = "pet-bubble show";
@@ -309,55 +538,42 @@ try {
       }, 4000);
     }, 1500);
 
-    console.log("桌面宠物启动成功 ✓");
-    setPetMouseEvents(false);
+    console.log("桌面宠物启动成功 ✓ (多姿态模式，12个表情自动切换)");
   }
 
   // ==================== 闹钟反应动画 ====================
-  var alarmExclaim = document.getElementById("alarmExclaim");
-
   function triggerAlarmReaction(alarm) {
     var label = (alarm && alarm.label) ? alarm.label : "闹钟";
     console.log("[Pet] Alarm reaction triggered: " + label);
-    // 全屏闪光
+
+    // 锁定姿态，切换到庆祝
+    isAlarmActive = true;
+    clearTimeout(poseTimer);
+    switchPose("celebrating");
+
     document.body.className = "alarm-flash";
     setTimeout(function() { document.body.className = ""; }, 2500);
 
-    // 摇头（已包含红色脉冲光环）
     petImage.classList.add("alarm-shake");
-    // 头顶感叹号弹出
-    alarmExclaim.className = "alarm-exclaim show";
-    // 红色气泡
-    petBubble.textContent = label + " 响啦！";
+    petBubble.textContent = "⏰ " + label + " 响啦！";
     petBubble.className = "pet-bubble alarm-bubble show";
-    // 状态灯闪烁
-        petStatus.className = "pet-status scheduled";
+    petStatus.className = "pet-status scheduled";
 
-    // 2秒后恢复动画class
+    // 10秒后停止闹钟状态
     setTimeout(function() {
       petImage.classList.remove("alarm-shake");
-    }, 2000);
-    // 2.5秒后感叹号消失
-    setTimeout(function() {
-      alarmExclaim.className = "alarm-exclaim";
-    }, 2500);
-    // 5秒后恢复气泡
+      isAlarmActive = false;
+      console.log("[Pet] Alarm ended, resuming auto pose");
+    }, 10000);
     setTimeout(function() {
       petBubble.className = "pet-bubble";
-    }, 5000);
-    // 7秒后恢复状态灯
+    }, 12000);
     setTimeout(function() {
       checkAlarms();
+      // 恢复自动姿态切换
+      schedulePoseTimer(5000);
     }, 7000);
   }
-
-  // ==================== 三连击测试动画 ====================
-  petImage.addEventListener("dblclick", function(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    console.log("[Pet] Double-click: testing alarm animation");
-    triggerAlarmReaction({ label: "测试" });
-  });
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", init);

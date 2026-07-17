@@ -53,6 +53,7 @@ body.alarm-flash {
   overflow: visible;
   cursor: default;
   touch-action: none;
+  -webkit-app-region: drag;
 }
 
 .pet-float-wrapper {
@@ -67,22 +68,23 @@ body.alarm-flash {
   pointer-events: none;
 }
 
-/* 宠物图片 */
+/* 宠物图片 - 无边框浮动桌面宠物 */
 .pet-image {
-  width: 150px;
+  width: 160px;
   height: 200px;
-  border-radius: 12px;
+  border-radius: 0;
   background: transparent;
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: center;
   flex: 0 0 auto;
-  cursor: pointer;
-  transition: transform 180ms ease, box-shadow 220ms ease;
+  cursor: grab;
+  transition: transform 180ms ease;
   position: relative;
-  overflow: hidden;
-  box-shadow: 0 8px 20px rgba(45, 52, 54, 0.2), 0 0 0 1px rgba(99, 102, 241, 0.16);
+  overflow: visible;
+  box-shadow: none;
   pointer-events: auto;
+  -webkit-app-region: drag;
 }
 
 .pet-image img {
@@ -92,25 +94,12 @@ body.alarm-flash {
   pointer-events: none;
   position: relative;
   z-index: 1;
-  filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.35));
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.25));
   animation: petIdle 6s ease-in-out infinite;
+  transition: opacity 0.28s ease;
 }
 
-.pet-container.dragging .pet-image,
-.pet-container.dragging .pet-image img {
-  animation-play-state: paused !important;
-  transition: none !important;
-}
 
-.pet-container.dragging .pet-image,
-.pet-container.dragging .pet-time {
-  cursor: grabbing;
-}
-
-.pet-container.dragging .mini-info,
-.pet-container.dragging .pet-bubble {
-  display: none !important;
-}
 
 .pet-image.placeholder {
   background: linear-gradient(135deg, #6c5ce7 0%, #5b4cdb 100%);
@@ -121,14 +110,39 @@ body.alarm-flash {
   font-size: 60px;
 }
 
+/* 透明点击覆盖层（no-drag），确保点击一定有效 */
+#petClickOverlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: calc(100% - 36px);
+  z-index: 5;
+  cursor: pointer;
+  -webkit-app-region: no-drag !important;
+  pointer-events: auto !important;
+}
+
+/* 透明点击覆盖层（no-drag），确保点击事件不被拖动吃掉 */
+.pet-click-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 36px;
+  z-index: 10;
+  -webkit-app-region: no-drag;
+  cursor: pointer;
+  border-radius: 12px;
+}
+
 .pet-image:hover {
-  transform: translateY(-1px) scale(1.025);
-  box-shadow: 0 10px 24px rgba(45, 52, 54, 0.24), 0 0 0 2px rgba(99, 102, 241, 0.24);
-  cursor: grab;
+  transform: translateY(-2px) scale(1.03);
 }
 
 .pet-image:active {
-  transform: scale(0.985);
+  transform: scale(0.97);
+  cursor: grabbing;
 }
 
 /* 点击涟漪 */
@@ -153,53 +167,27 @@ body.alarm-flash {
 }
 
 @keyframes petIdle {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-2px); }
+  0%, 100% { transform: translateY(0) scale(1); }
+  25% { transform: translateY(-8px) scale(1.02); }
+  50% { transform: translateY(-4px) scale(1); }
+  75% { transform: translateY(-8px) scale(1.01); }
 }
 
-/* 闹钟提醒：短促摆动，避免透明小窗口中的大幅裁切 */
+/* 闹钟提醒：剧烈抖动 + 放大弹跳（无边框） */
 @keyframes petShake {
-  0%, 100% { transform: rotate(0) scale(1); box-shadow: 0 8px 20px rgba(45, 52, 54, 0.2), 0 0 0 1px rgba(99, 102, 241, 0.16); }
-  15% { transform: rotate(-7deg) scale(1.025); box-shadow: 0 0 24px 4px rgba(255, 107, 107, 0.5); }
-  30% { transform: rotate(7deg) scale(1.025); }
-  45% { transform: rotate(-5deg) scale(1.02); }
-  60% { transform: rotate(5deg) scale(1.015); box-shadow: 0 0 18px 2px rgba(255, 107, 107, 0.35); }
-  78% { transform: rotate(-2deg) scale(1.005); }
+  0%, 100% { transform: translateY(0) rotate(0) scale(1); }
+  10% { transform: translateY(-18px) rotate(-15deg) scale(1.15); }
+  20% { transform: translateY(6px) rotate(15deg) scale(1.05); }
+  30% { transform: translateY(-14px) rotate(-12deg) scale(1.12); }
+  40% { transform: translateY(4px) rotate(12deg) scale(1.04); }
+  50% { transform: translateY(-10px) rotate(-8deg) scale(1.1); }
+  65% { transform: translateY(3px) rotate(6deg) scale(1.03); }
+  80% { transform: translateY(-6px) rotate(-4deg) scale(1.06); }
 }
 
 .pet-image.alarm-shake {
-  animation: petShake 1.25s ease-out !important;
-}
-
-/* 闹钟感叹号 */
-.alarm-exclaim {
-  position: absolute;
-  top: 4px;
-  left: 50%;
-  transform: translateX(-50%) scale(0);
-  width: 28px;
-  height: 28px;
-  background: #ff6b6b;
-  border-radius: 50%;
-  color: white;
-  font-size: 18px;
-  font-weight: 900;
-  line-height: 28px;
-  text-align: center;
-  opacity: 0;
-  pointer-events: none;
-  z-index: 20;
-  box-shadow: 0 2px 10px rgba(255, 107, 107, 0.5);
-}
-.alarm-exclaim.show {
-  animation: exclaimPop 1.8s ease-out forwards;
-}
-@keyframes exclaimPop {
-  0%   { transform: translateX(-50%) scale(0); opacity: 0; }
-  8%   { transform: translateX(-50%) scale(1.3); opacity: 1; }
-  15%  { transform: translateX(-50%) scale(1); opacity: 1; }
-  70%  { transform: translateX(-50%) scale(1); opacity: 1; }
-  100% { transform: translateX(-50%) scale(0.5); opacity: 0; }
+  animation: petShake 0.7s ease-in-out infinite !important;
+  box-shadow: none !important;
 }
 
 /* 闹钟反应气泡 */
@@ -271,6 +259,7 @@ body.alarm-flash {
   text-align: center;
   z-index: 45;
   pointer-events: auto;
+  -webkit-app-region: no-drag;
 }
 
 .pet-bubble::after {
@@ -308,6 +297,7 @@ body.alarm-flash {
   transform: scale(0.92);
   transition: opacity 0.18s ease, transform 0.18s ease, background 0.18s ease;
   z-index: 999;
+  -webkit-app-region: no-drag;
 }
 
 .pet-container.controls-visible:not(.dragging) .pet-close,
@@ -337,20 +327,9 @@ body.alarm-flash {
   transition: background 0.3s ease, color 0.3s ease;
   cursor: grab;
   pointer-events: auto;
+  -webkit-app-region: drag;
 }
 
-
-/* 拖动提示 */
-.drag-hint {
-  position: absolute;
-  bottom: 4px;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 10px;
-  color: #636e72;
-  opacity: 0.7;
-  pointer-events: auto;
-}
 
 /* 计时器弹窗 */
 .mini-info {
@@ -371,6 +350,7 @@ body.alarm-flash {
   transition: background 0.3s ease, color 0.3s ease;
   z-index: 40;
   pointer-events: auto;
+  -webkit-app-region: no-drag;
 }
 
 .mini-info.show {

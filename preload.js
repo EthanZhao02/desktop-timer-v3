@@ -18,8 +18,7 @@ contextBridge.exposeInMainWorld('api', {
   showNotification: (payload) => ipcRenderer.invoke('show-notification', payload),
   hidePet: () => ipcRenderer.invoke('hide-pet'),
   showMain: () => ipcRenderer.invoke('show-main'),
-  setPetMouseEvents: (enabled) => ipcRenderer.send('set-pet-mouse-events', !!enabled),
-  movePetTo: (x, y) => ipcRenderer.send('move-pet-to', x, y),
+  setWindowPos: (x, y) => ipcRenderer.invoke('set-window-pos', x, y),
   quitApp: () => ipcRenderer.invoke('quit-app'),
   minimizeToPet: () => ipcRenderer.invoke('minimize-to-pet'),
   // 主题同步
@@ -35,4 +34,8 @@ contextBridge.exposeInMainWorld('api', {
   onAlarmsUpdated: (cb) => ipcRenderer.on('alarms-updated', (e, alarms) => cb(alarms)),
   onSettingsUpdated: (cb) => ipcRenderer.on('settings-updated', (e, settings) => cb(settings)),
   onAppWarning: (cb) => ipcRenderer.on('app-warning', (e, warning) => cb(warning)),
+  // 活动窗口状态检测
+  onWindowState: (cb) => ipcRenderer.on('window-state', (e, state) => cb(state)),
+  // 锁屏/解锁事件（带睡眠时长）
+  onLockEvent: (cb) => ipcRenderer.on('lock-event', (e, data) => cb(data)),
 });

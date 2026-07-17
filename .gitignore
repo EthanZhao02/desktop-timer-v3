@@ -1,28 +1,37 @@
-node_modules/
+# === 打包产物（绝对不推）===
 dist/
 dist-*/
 dist_*/
 dist_bak_*/
-_verify/
 
+# === 临时调试文件 ===
 *.log
 *.log.err
-electron-stdout.log
-electron-stderr.log
-
 screenshot-*.png
-pkg-t*.png
-tests/*.png
+pkg-*.png
+_verify/
 _*.png
 _stderr*.txt
 _stdout*.txt
 _ico_check.txt
 __tmp-*.js
-
+build_log.txt
+dev-log.md
 *.tmp
 *.bak
 
-build_log.txt
-dev-log.md
-*.ps1
-*.py
+# === Node 依赖 ===
+node_modules/
+package-lock.json
+
+# === Electron 构建产物 ===
+*.asar
+*.asar.unpacked
+
+# === IDE / OS 临时 ===
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.vscode/
+.idea/
