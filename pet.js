@@ -670,10 +670,6 @@ try {
     }
   }
 
-  // 在 init 中调用
-  bindChatEvents();
-  loadChatHistory();
-
   // ==================== 关闭按钮 ====================
   petClose.onclick = function(e) {
     e.stopPropagation();
@@ -778,6 +774,9 @@ try {
       var savedTheme = localStorage.getItem("zhiyu-theme");
       if (savedTheme) document.documentElement.setAttribute("data-theme", savedTheme);
     } catch (e) {}
+
+    // 绑定对话面板事件（确保DOM已加载）
+    bindChatEvents();
 
     // 启动自动姿态切换（5秒后开始，给预加载时间）
     setTimeout(function() {

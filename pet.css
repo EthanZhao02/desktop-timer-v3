@@ -68,6 +68,11 @@ body.alarm-flash {
   pointer-events: none;
 }
 
+/* 对话面板需要接收点击事件 */
+.pet-chat-panel {
+  pointer-events: auto;
+}
+
 /* 宠物图片 - 无边框浮动桌面宠物 */
 .pet-image {
   width: 160px;
