@@ -774,10 +774,12 @@ body.alarm-flash {
 
 /* ==================== API 设置面板 ==================== */
 .pet-settings-panel {
-  position: absolute;
-  bottom: 100px;
-  right: 8px;
-  width: 280px;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 320px;
+  max-height: 90vh;
   background: linear-gradient(180deg, rgba(26,26,46,0.98) 0%, rgba(22,22,38,0.98) 100%);
   border: 1px solid rgba(108,92,231,0.35);
   border-radius: 16px;
@@ -798,8 +800,8 @@ body.alarm-flash {
 }
 
 @keyframes settingsSlideIn {
-  from { opacity: 0; transform: translateY(10px) scale(0.96); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
+  from { opacity: 0; transform: translate(-50%, -45%) scale(0.96); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 }
 
 .pet-settings-header {
@@ -842,9 +844,17 @@ body.alarm-flash {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  overflow-y: auto;
+  max-height: calc(90vh - 60px);
 }
 
 .settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settings-item {
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -883,7 +893,8 @@ body.alarm-flash {
   color: rgba(255,255,255,0.3);
 }
 
-.settings-toggle {
+.settings-toggle,
+.settings-toggle-btn {
   background: rgba(108,92,231,0.15);
   border: 1px solid rgba(108,92,231,0.3);
   border-radius: 8px;
@@ -903,6 +914,38 @@ body.alarm-flash {
 .settings-hint {
   font-size: 11px;
   color: rgba(255,255,255,0.35);
+}
+
+.settings-status {
+  font-size: 11px;
+  color: rgba(255,255,255,0.5);
+  margin-top: 4px;
+}
+
+.settings-status.configured {
+  color: #3fb950;
+}
+
+.settings-tips {
+  font-size: 11px;
+  color: rgba(255,255,255,0.5);
+  background: rgba(108,92,231,0.08);
+  padding: 10px 12px;
+  border-radius: 8px;
+  border-left: 2px solid rgba(108,92,231,0.4);
+}
+
+.settings-tips p {
+  margin: 0 0 6px 0;
+}
+
+.settings-tips ul {
+  margin: 0;
+  padding-left: 16px;
+}
+
+.settings-tips li {
+  margin: 2px 0;
 }
 
 .settings-actions {
