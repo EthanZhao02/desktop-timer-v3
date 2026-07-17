@@ -265,7 +265,9 @@ function createPetWindow() {
   petWindow.once('ready-to-show', () => {
     petWindow.show();
     petWindow.setSize(PET_WINDOW_WIDTH, PET_WINDOW_HEIGHT, false);
-    safeLog('[main] pet window shown');
+    // 使用 screen-saver 级别确保宠物始终在最前面
+    petWindow.setAlwaysOnTop(true, 'screen-saver');
+    safeLog('[main] pet window shown (screen-saver level)');
   });
   petWindow.webContents.on('did-fail-load', (e, code, desc) => {
     safeError('[main] pet window load failed:', code, desc);
@@ -352,7 +354,12 @@ function showMainWindow() {
 function togglePetWindow() {
   if (petWindow) {
     if (petWindow.isVisible()) petWindow.hide();
-    else petWindow.show();
+    else {
+      petWindow.show();
+      // 重新显示时确保置顶级别不丢失
+      petWindow.setAlwaysOnTop(true, 'screen-saver');
+      petWindow.moveTop();
+    }
   } else {
     createPetWindow();
   }
@@ -887,15 +894,16 @@ ipcMain.handle('get-model-configs', () => {
 });
 
 
-// �����ʾ/����ʱͻ�����ﴰ�ڣ�ȷ���ɿ���
+// �����ʾ/����ʱͻ�����ﴰ�ڣ�ȷ���ɿ���
 ipcMain.on('pet-panel-visible', (event, visible) => {
   if (petWindow && !petWindow.isDestroyed()) {
     if (visible) {
+      // 强化置顶：screen-saver 级别 + moveTop + focus
       petWindow.setAlwaysOnTop(true, 'screen-saver');
+      petWindow.moveTop();
       petWindow.focus();
-    } else {
-      petWindow.setAlwaysOnTop(true, 'normal');
     }
+    // 关闭面板后保持 screen-saver 级别，不再降级到 normal
   }
 });
 
