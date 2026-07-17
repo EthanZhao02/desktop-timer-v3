@@ -414,11 +414,30 @@ try {
     }, 300);
   };
 
-  // ==================== 点击展开对话面板 ====================
+  // ==================== 单击/双击处理 ====================
+  var clickCount = 0;
+  var clickTimer = null;
+
   async function handlePetClick() {
-    petImage.classList.add('ripple');
-    setTimeout(function() { petImage.classList.remove('ripple'); }, 600);
-    toggleChatPanel();
+    clickCount++;
+
+    if (clickCount === 1) {
+      // 等待可能的第二次点击
+      clickTimer = setTimeout(function() {
+        // 单击：打开对话面板
+        clickCount = 0;
+        petImage.classList.add('ripple');
+        setTimeout(function() { petImage.classList.remove('ripple'); }, 600);
+        toggleChatPanel();
+      }, 250); // 250ms 内双击判定
+    } else if (clickCount === 2) {
+      // 双击：打开计时器
+      clearTimeout(clickTimer);
+      clickCount = 0;
+      petImage.classList.add('ripple');
+      setTimeout(function() { petImage.classList.remove('ripple'); }, 600);
+      openTimerWindow();
+    }
   }
 
   // 打开计时器主窗口
@@ -464,19 +483,13 @@ try {
   function updateModelSelector() {
     var selector = document.getElementById('petChatModel');
     if (!selector) return;
-    selector.innerHTML = '';
-    var models = [
-      { id: 'qclaw', name: '⭐ 星野 (本地)' },
-      { id: 'deepseek', name: '🤖 DeepSeek' },
-      { id: 'volcano', name: '🌋 火山引擎' }
-    ];
-    models.forEach(function(m) {
-      var opt = document.createElement('option');
-      opt.value = m.id;
-      opt.textContent = m.name;
-      if (m.id === currentModel) opt.selected = true;
-      selector.appendChild(opt);
-    });
+    // HTML 中已定义选项，这里只确保当前模型被选中
+    for (var i = 0; i < selector.options.length; i++) {
+      if (selector.options[i].value === currentModel) {
+        selector.selectedIndex = i;
+        break;
+      }
+    }
   }
 
   function toggleChatPanel() {
@@ -598,50 +611,67 @@ try {
     if (btn) btn.style.display = chatHistory.length > 0 ? 'inline-flex' : 'none';
   }
 
-  // 绑定对话事件
-  if (chatSendBtn) chatSendBtn.addEventListener('click', sendChatMessage);
-  if (chatInput) {
-    chatInput.addEventListener('keydown', function(e) {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
+  // ==================== 事件绑定（在 init 中统一绑定）====================
+  function bindChatEvents() {
+    // 发送按钮
+    var sendBtn = document.getElementById('petChatSend');
+    if (sendBtn) {
+      sendBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
         sendChatMessage();
-      }
-    });
-  }
-  if (chatCloseBtn) {
-    chatCloseBtn.addEventListener('click', function(e) {
-      e.stopPropagation();
-      chatPanel.classList.remove('show');
-    });
+      });
+    }
+
+    // 输入框回车
+    var input = document.getElementById('petChatInput');
+    if (input) {
+      input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          sendChatMessage();
+        }
+      });
+    }
+
+    // 关闭按钮（面板内）
+    var closeBtn = document.getElementById('petChatClose');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var panel = document.getElementById('petChatPanel');
+        if (panel) panel.classList.remove('show');
+      });
+    }
+
+    // 模型选择器
+    var modelSel = document.getElementById('petChatModel');
+    if (modelSel) {
+      modelSel.addEventListener('change', function(e) {
+        switchModel(e.target.value);
+      });
+    }
+
+    // 打开计时器按钮
+    var timerBtn = document.getElementById('petOpenTimer');
+    if (timerBtn) {
+      timerBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        openTimerWindow();
+      });
+    }
+
+    // 清空记录按钮
+    var clearBtn = document.getElementById('petChatClear');
+    if (clearBtn) {
+      clearBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        clearChatHistory();
+      });
+    }
   }
 
-  // 模型选择器
-  var modelSelector = document.getElementById('petChatModel');
-  if (modelSelector) {
-    modelSelector.addEventListener('change', function(e) {
-      switchModel(e.target.value);
-    });
-  }
-
-  // 打开计时器按钮
-  var openTimerBtn = document.getElementById('petOpenTimer');
-  if (openTimerBtn) {
-    openTimerBtn.addEventListener('click', function(e) {
-      e.stopPropagation();
-      openTimerWindow();
-    });
-  }
-
-  // 清空记录按钮
-  var clearBtn = document.getElementById('petChatClear');
-  if (clearBtn) {
-    clearBtn.addEventListener('click', function(e) {
-      e.stopPropagation();
-      clearChatHistory();
-    });
-  }
-
-  // 初始化：加载历史记录
+  // 在 init 中调用
+  bindChatEvents();
   loadChatHistory();
 
   // ==================== 关闭按钮 ====================
