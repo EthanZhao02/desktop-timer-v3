@@ -697,10 +697,12 @@ try {
     // 显示用户消息
     addChatMessage(text, 'user');
 
-    // 显示思考中（带模型名）
+    // 显示思考中（带模型名）- 显示在宠物气泡里
     var modelName = currentModel === 'qclaw' ? '星野' : (currentModel === 'deepseek' ? 'DeepSeek' : 'AI');
     addChatMessage(modelName + ' 思考中...', 'thinking');
-    showStatus(modelName + ' 思考中...', '');
+    // 在宠物气泡显示思考状态
+    petBubble.textContent = modelName + ' 思考中...';
+    petBubble.className = 'pet-bubble show thinking-bubble';
 
     try {
       var result;
@@ -722,25 +724,40 @@ try {
           if (chatHistory.length > 20) chatHistory = chatHistory.slice(-20);
           // 保存历史
           saveChatHistory();
-          // 显示完成状态
-          showStatus('已回复', 'done');
-          setTimeout(hideStatus, 3000);
+          // 在宠物气泡显示完成状态
+          petBubble.textContent = '已回复~';
+          petBubble.className = 'pet-bubble show done-bubble';
+          setTimeout(function() {
+            petBubble.classList.remove('show');
+          }, 3000);
         } else {
           addChatMessage('（没有回复...）', 'ai');
-          showStatus('已回复（无内容）', 'done');
-          setTimeout(hideStatus, 3000);
+          // 在宠物气泡显示完成状态
+          petBubble.textContent = '已回复（无内容）';
+          petBubble.className = 'pet-bubble show done-bubble';
+          setTimeout(function() {
+            petBubble.classList.remove('show');
+          }, 3000);
         }
       } else {
         clearThinking();
         addChatMessage(result && result.error ? result.error : 'AI 开小差了，稍后再试试~', 'error');
-        showStatus('回复失败', 'error');
-        setTimeout(hideStatus, 3000);
+        // 在宠物气泡显示失败状态
+        petBubble.textContent = '回复失败...';
+        petBubble.className = 'pet-bubble show error-bubble';
+        setTimeout(function() {
+          petBubble.classList.remove('show');
+        }, 3000);
       }
     } catch (err) {
       clearThinking();
       addChatMessage('对话失败: ' + err.message, 'error');
-      showStatus('对话失败', 'error');
-      setTimeout(hideStatus, 3000);
+      // 在宠物气泡显示失败状态
+      petBubble.textContent = '对话失败...';
+      petBubble.className = 'pet-bubble show error-bubble';
+      setTimeout(function() {
+        petBubble.classList.remove('show');
+      }, 3000);
     } finally {
       chatLoading = false;
       chatSendBtn.disabled = false;

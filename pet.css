@@ -281,6 +281,30 @@ body.alarm-flash {
   to { opacity: 1; transform: translate(-50%, 0); }
 }
 
+/* 思考中气泡 - 紫色脉冲 */
+.pet-bubble.thinking-bubble {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  animation: bubbleIn 0.3s ease, thinkingPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes thinkingPulse {
+  0%, 100% { opacity: 0.85; }
+  50% { opacity: 1; }
+}
+
+/* 完成气泡 - 绿色 */
+.pet-bubble.done-bubble {
+  background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+  color: white;
+}
+
+/* 失败气泡 - 红色 */
+.pet-bubble.error-bubble {
+  background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
+  color: white;
+}
+
 /* 关闭按钮 */
 .pet-close {
   position: absolute;
