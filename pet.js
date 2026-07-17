@@ -414,17 +414,70 @@ try {
     }, 300);
   };
 
-  // ==================== 点击展开计时器 ====================
+  // ==================== 点击展开对话面板 ====================
   async function handlePetClick() {
     petImage.classList.add('ripple');
     setTimeout(function() { petImage.classList.remove('ripple'); }, 600);
-    // 切换对话面板（点击宠物直接打开对话）
     toggleChatPanel();
   }
 
+  // 打开计时器主窗口
+  async function openTimerWindow() {
+    try {
+      if (window.api && window.api.showMain) {
+        await window.api.showMain();
+      } else {
+        showMessage("请手动打开主计时器窗口");
+      }
+    } catch (err) {
+      console.error("[Pet] 打开主窗口失败:", err);
+      showMessage("打开计时器失败: " + err.message);
+    }
+  }
+
   // ==================== 星野对话 ====================
-  var chatHistory = []; // 对话历史（最近5轮）
+  var chatHistory = []; // 对话历史
   var chatLoading = false;
+  var currentModel = 'qclaw'; // 默认模型
+  var modelConfigs = {}; // 模型配置缓存
+
+  // 加载模型配置
+  async function loadModelConfigs() {
+    try {
+      if (window.api && window.api.getModelConfigs) {
+        modelConfigs = await window.api.getModelConfigs();
+        updateModelSelector();
+      }
+    } catch (e) {
+      console.log('[Pet] 模型配置加载失败，使用默认');
+    }
+  }
+
+  // 切换模型
+  function switchModel(modelId) {
+    currentModel = modelId;
+    var modelNames = { qclaw: '星野', deepseek: 'DeepSeek', volcano: '火山引擎' };
+    addChatMessage('已切换到: ' + (modelNames[modelId] || modelId), 'system');
+  }
+
+  // 更新模型选择器
+  function updateModelSelector() {
+    var selector = document.getElementById('petChatModel');
+    if (!selector) return;
+    selector.innerHTML = '';
+    var models = [
+      { id: 'qclaw', name: '⭐ 星野 (本地)' },
+      { id: 'deepseek', name: '🤖 DeepSeek' },
+      { id: 'volcano', name: '🌋 火山引擎' }
+    ];
+    models.forEach(function(m) {
+      var opt = document.createElement('option');
+      opt.value = m.id;
+      opt.textContent = m.name;
+      if (m.id === currentModel) opt.selected = true;
+      selector.appendChild(opt);
+    });
+  }
 
   function toggleChatPanel() {
     var isVisible = chatPanel.classList.contains('show');
@@ -432,6 +485,10 @@ try {
       chatPanel.classList.remove('show');
     } else {
       chatPanel.classList.add('show');
+      // 首次打开加载配置
+      if (Object.keys(modelConfigs).length === 0) {
+        loadModelConfigs();
+      }
       // 聚焦输入框
       setTimeout(function() { if (chatInput) chatInput.focus(); }, 50);
     }
@@ -463,13 +520,14 @@ try {
     // 显示用户消息
     addChatMessage(text, 'user');
 
-    // 显示思考中
-    addChatMessage('思考中...', 'thinking');
+    // 显示思考中（带模型名）
+    var modelName = currentModel === 'qclaw' ? '星野' : (currentModel === 'deepseek' ? 'DeepSeek' : 'AI');
+    addChatMessage(modelName + ' 思考中...', 'thinking');
 
     try {
       var result;
       if (window.api && window.api.sendChatMessage) {
-        result = await window.api.sendChatMessage(text);
+        result = await window.api.sendChatMessage(text, currentModel);
       } else {
         result = { success: false, error: '对话接口不可用' };
       }
@@ -480,15 +538,17 @@ try {
         var reply = (result.reply || '').trim();
         if (reply) {
           addChatMessage(reply, 'ai');
-          // 更新对话历史（保留最近5轮）
-          chatHistory.push({ role: 'user', content: text });
-          chatHistory.push({ role: 'assistant', content: reply });
-          if (chatHistory.length > 10) chatHistory = chatHistory.slice(-10);
+          // 更新对话历史（保留最近20条）
+          chatHistory.push({ role: 'user', content: text, model: currentModel });
+          chatHistory.push({ role: 'assistant', content: reply, model: currentModel });
+          if (chatHistory.length > 20) chatHistory = chatHistory.slice(-20);
+          // 保存历史
+          saveChatHistory();
         } else {
-          addChatMessage('（星野没有回复...）', 'ai');
+          addChatMessage('（没有回复...）', 'ai');
         }
       } else {
-        addChatMessage(result && result.error ? result.error : '星野开小差了，稍后再试试~', 'error');
+        addChatMessage(result && result.error ? result.error : 'AI 开小差了，稍后再试试~', 'error');
       }
     } catch (err) {
       clearThinking();
@@ -497,6 +557,46 @@ try {
       chatLoading = false;
       chatSendBtn.disabled = false;
     }
+
+    // 更新清空按钮状态
+    updateClearButton();
+  }
+
+  // 保存/加载对话历史
+  function saveChatHistory() {
+    try {
+      localStorage.setItem('petChatHistory', JSON.stringify(chatHistory));
+    } catch (e) {}
+  }
+
+  function loadChatHistory() {
+    try {
+      var saved = localStorage.getItem('petChatHistory');
+      if (saved) {
+        chatHistory = JSON.parse(saved);
+        // 恢复显示（只显示最近10条避免太长）
+        var recent = chatHistory.slice(-10);
+        recent.forEach(function(msg) {
+          addChatMessage(msg.content, msg.role === 'user' ? 'user' : 'ai');
+        });
+      }
+    } catch (e) {}
+  }
+
+  // 清空对话
+  function clearChatHistory() {
+    chatHistory = [];
+    if (chatMessages) chatMessages.innerHTML = '';
+    try {
+      localStorage.removeItem('petChatHistory');
+    } catch (e) {}
+    updateClearButton();
+  }
+
+  function updateClearButton() {
+    var btn = document.getElementById('petChatClear');
+    if (btn) btn.style.display = chatHistory.length > 0 ? 'inline-flex' : 'none';
+  }
   }
 
   // 绑定对话事件
@@ -515,6 +615,35 @@ try {
       chatPanel.classList.remove('show');
     });
   }
+
+  // 模型选择器
+  var modelSelector = document.getElementById('petChatModel');
+  if (modelSelector) {
+    modelSelector.addEventListener('change', function(e) {
+      switchModel(e.target.value);
+    });
+  }
+
+  // 打开计时器按钮
+  var openTimerBtn = document.getElementById('petOpenTimer');
+  if (openTimerBtn) {
+    openTimerBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      openTimerWindow();
+    });
+  }
+
+  // 清空记录按钮
+  var clearBtn = document.getElementById('petChatClear');
+  if (clearBtn) {
+    clearBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      clearChatHistory();
+    });
+  }
+
+  // 初始化：加载历史记录
+  loadChatHistory();
 
   // ==================== 关闭按钮 ====================
   petClose.onclick = function(e) {

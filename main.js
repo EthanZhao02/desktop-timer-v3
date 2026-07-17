@@ -539,39 +539,93 @@ ipcMain.handle('import-data', async () => {
   }
 });
 
-// ==================== QClaw 星野对话 ====================
-const QCLAW_GATEWAY_URL = 'http://localhost:53717/v1/chat/completions';
-const QCLAW_TOKEN = '9c19b79f500b5bce8054199a05bb2b7b9dc8b37193e1b751';
+// ==================== AI 对话（多模型支持）====================
+// 模型配置 - 可从配置文件加载
+const MODEL_CONFIGS = {
+  qclaw: {
+    name: '星野',
+    url: 'http://localhost:53717/v1/chat/completions',
+    token: '9c19b79f500b5bce8054199a05bb2b7b9dc8b37193e1b751',
+    model: 'openclaw/main',
+    maxTokens: 300
+  },
+  deepseek: {
+    name: 'DeepSeek',
+    url: 'https://api.deepseek.com/v1/chat/completions',
+    token: process.env.DEEPSEEK_API_KEY || '',
+    model: 'deepseek-chat',
+    maxTokens: 500
+  },
+  volcano: {
+    name: '火山引擎',
+    url: 'https://ark.cn-beijing.volces.com/api/v3/chat/completions',
+    token: process.env.VOLCANO_API_KEY || '',
+    model: 'doubao-pro-32k',
+    maxTokens: 500
+  }
+};
 
-ipcMain.handle('send-chat-message', async (e, message) => {
+// 从配置文件加载模型配置（如果存在）
+const MODEL_CONFIG_PATH = path.join(USER_DATA, 'model-config.json');
+try {
+  if (fs.existsSync(MODEL_CONFIG_PATH)) {
+    const customConfig = JSON.parse(fs.readFileSync(MODEL_CONFIG_PATH, 'utf-8'));
+    Object.assign(MODEL_CONFIGS, customConfig);
+    safeLog('[main] 已加载自定义模型配置');
+  }
+} catch (e) {
+  safeError('[main] 加载模型配置失败:', e.message);
+}
+
+// 暴露模型配置给前端（隐藏敏感 token）
+ipcMain.handle('get-model-configs', () => {
+  return Object.fromEntries(
+    Object.entries(MODEL_CONFIGS).map(([k, v]) => [k, { name: v.name, model: v.model }])
+  );
+});
+
+// 发送消息
+ipcMain.handle('send-chat-message', async (e, message, modelId = 'qclaw') => {
+  const config = MODEL_CONFIGS[modelId] || MODEL_CONFIGS.qclaw;
+
+  // 检查 API Key
+  if (!config.token && modelId !== 'qclaw') {
+    return { success: false, error: `${config.name} 需要配置 API Key` };
+  }
+
   try {
-    const response = await fetch(QCLAW_GATEWAY_URL, {
+    const response = await fetch(config.url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${QCLAW_TOKEN}`
+        'Authorization': `Bearer ${config.token}`
       },
       body: JSON.stringify({
-        model: 'openclaw/main',
+        model: config.model,
         messages: [{ role: 'user', content: String(message) }],
-        max_tokens: 300
+        max_tokens: config.maxTokens
       })
     });
 
     if (!response.ok) {
       const errText = await response.text().catch(() => 'unknown');
-      safeError('[main] QClaw API error:', response.status, errText);
+      safeError(`[main] ${config.name} API error:`, response.status, errText);
+      if (response.status === 401) {
+        return { success: false, error: `${config.name} API Key 无效` };
+      }
       return { success: false, error: `请求失败 (${response.status})` };
     }
 
     const data = await response.json();
     const reply = data.choices?.[0]?.message?.content || '(无回复)';
-    safeLog('[main] 星野回复:', reply.substring(0, 50));
+    safeLog(`[main] ${config.name} 回复:`, reply.substring(0, 50));
     return { success: true, reply };
   } catch (err) {
-    safeError('[main] QClaw 连接失败:', err.message);
-    // QClaw 未运行：返回友好的提示
-    return { success: false, error: 'QClaw 未运行，请先启动星野助手' };
+    safeError(`[main] ${config.name} 连接失败:`, err.message);
+    if (modelId === 'qclaw') {
+      return { success: false, error: 'QClaw 未运行，请先启动星野助手' };
+    }
+    return { success: false, error: `${config.name} 连接失败，请检查网络` };
   }
 });
 

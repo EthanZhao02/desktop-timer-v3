@@ -27,14 +27,45 @@
 
     <!-- 星野对话面板 -->
     <div class="pet-chat-panel" id="petChatPanel">
+      <!-- 头部：模型选择 + 操作按钮 -->
       <div class="pet-chat-header">
-        <span>💬 星野对话</span>
-        <button class="pet-chat-close" id="petChatClose" title="关闭">×</button>
+        <div class="pet-chat-header-left">
+          <select class="pet-chat-model" id="petChatModel" title="选择AI模型">
+            <option value="qclaw">⭐ 星野 (本地)</option>
+            <option value="deepseek">🤖 DeepSeek</option>
+            <option value="volcano">🌋 火山引擎</option>
+          </select>
+        </div>
+        <div class="pet-chat-header-right">
+          <button class="pet-chat-iconbtn" id="petOpenTimer" title="打开计时器">⏱️</button>
+          <button class="pet-chat-iconbtn" id="petChatClear" title="清空记录" style="display:none">🗑️</button>
+          <button class="pet-chat-close" id="petChatClose" title="关闭">×</button>
+        </div>
       </div>
-      <div class="pet-chat-messages" id="petChatMessages"></div>
-      <div class="pet-chat-input-row">
-        <input class="pet-chat-input" id="petChatInput" type="text" placeholder="和星野说点什么..." maxlength="500" autocomplete="off" />
-        <button class="pet-chat-send" id="petChatSend">发送</button>
+
+      <!-- 消息区域 -->
+      <div class="pet-chat-messages" id="petChatMessages">
+        <div class="pet-chat-welcome">
+          <div class="pet-chat-welcome-title">👋 你好，我是星野</div>
+          <div class="pet-chat-welcome-tips">
+            点击输入框开始对话<br>
+            支持编程、写作、闲聊
+          </div>
+        </div>
+      </div>
+
+      <!-- 输入区域 -->
+      <div class="pet-chat-input-area">
+        <div class="pet-chat-input-row">
+          <input class="pet-chat-input" id="petChatInput" type="text" placeholder="和星野说点什么..." maxlength="500" autocomplete="off" />
+          <button class="pet-chat-send" id="petChatSend">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="22" y1="2" x2="11" y2="13"></line>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+            </svg>
+          </button>
+        </div>
+        <div class="pet-chat-hint">按 Enter 发送 · 支持多轮对话</div>
       </div>
     </div>
 
