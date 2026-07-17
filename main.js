@@ -875,3 +875,13 @@ ipcMain.handle('get-api-keys', () => {
 ipcMain.handle('save-api-keys', (event, keys) => {
   return saveApiKeys(keys);
 });
+
+// 获取模型配置（前端用于检查 API Key 是否存在）
+ipcMain.handle('get-model-configs', () => {
+  const keys = loadApiKeys();
+  return {
+    deepseek: keys.deepseek ? { apiKey: keys.deepseek } : null,
+    volcano: keys.volcano ? { apiKey: keys.volcano } : null,
+    qclaw: { apiKey: null } // 星野本地模型，不需要配置
+  };
+});
