@@ -82,7 +82,7 @@
   <div class="pet-settings-panel" id="petSettingsPanel">
     <div class="pet-settings-header">
       <span class="pet-settings-title">API 设置</span>
-      <button class="pet-settings-close" id="petSettingsClose">×</button>
+      <button class="pet-settings-close" id="settingsClose">×</button>
     </div>
     <div class="pet-settings-content">
       <div class="settings-section">
@@ -90,7 +90,7 @@
           <label class="settings-label">DeepSeek API Key</label>
           <div class="settings-input-row">
             <input type="password" class="settings-input" id="deepseekKeyInput" placeholder="sk-..." />
-            <button class="settings-toggle-btn" id="toggleDeepseekKey">显示</button>
+            <button class="settings-toggle-btn" id="toggleDeepseek">显示</button>
           </div>
           <div class="settings-status" id="deepseekStatus">未配置</div>
         </div>
@@ -98,7 +98,7 @@
           <label class="settings-label">火山引擎 API Key</label>
           <div class="settings-input-row">
             <input type="password" class="settings-input" id="volcanoKeyInput" placeholder="..." />
-            <button class="settings-toggle-btn" id="toggleVolcanoKey">显示</button>
+            <button class="settings-toggle-btn" id="toggleVolcano">显示</button>
           </div>
           <div class="settings-status" id="volcanoStatus">未配置</div>
         </div>
@@ -109,36 +109,6 @@
           <li>DeepSeek: https://platform.deepseek.com</li>
           <li>火山引擎: https://console.volcengine.com</li>
         </ul>
-      </div>
-      <div class="settings-actions">
-        <button class="settings-btn settings-btn-secondary" id="settingsCancel">取消</button>
-        <button class="settings-btn settings-btn-primary" id="settingsSave">保存</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- API 设置面板 -->
-  <div class="pet-settings-panel" id="petSettingsPanel">
-    <div class="pet-settings-header">
-      <span class="pet-settings-title">API 设置</span>
-      <button class="pet-settings-close" id="settingsClose">×</button>
-    </div>
-    <div class="pet-settings-content">
-      <div class="settings-section">
-        <div class="settings-label">DeepSeek API Key</div>
-        <div class="settings-input-row">
-          <input type="password" class="settings-input" id="deepseekKeyInput" placeholder="sk-..." />
-          <button class="settings-toggle" id="toggleDeepseek">显示</button>
-        </div>
-        <div class="settings-hint">在 platform.deepseek.com 获取</div>
-      </div>
-      <div class="settings-section">
-        <div class="settings-label">火山引擎 API Key</div>
-        <div class="settings-input-row">
-          <input type="password" class="settings-input" id="volcanoKeyInput" placeholder="..." />
-          <button class="settings-toggle" id="toggleVolcano">显示</button>
-        </div>
-        <div class="settings-hint">在 console.volcengine.com 获取</div>
       </div>
       <div class="settings-actions">
         <button class="settings-btn settings-btn-secondary" id="settingsCancel">取消</button>
