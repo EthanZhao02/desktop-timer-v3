@@ -144,5 +144,5 @@ MIT License · © Ethan智域小店
   ·
   <a href="https://github.com/EthanZhao02">👤 作者主页</a>
   ·
-  <a href="https://ycyc.win">🌐 个人博客</a>
+  <a href="https://ez-3c6.pages.dev">🌐 个人博客</a>
 </p>
