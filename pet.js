@@ -464,6 +464,14 @@ try {
   var settingsPanel = document.getElementById('petSettingsPanel');
   var apiNotice = document.getElementById('apiNotice');
 
+  function syncPanelVisibility() {
+    if (!window.api || !window.api.setPanelVisible) return;
+    var chatVisible = chatPanel && chatPanel.classList.contains('show');
+    var settingsVisible = settingsPanel && settingsPanel.classList.contains('show');
+    window.api.setPanelVisible(Boolean(chatVisible || settingsVisible));
+  }
+
+
   // 加载保存的 API Key
   async function loadSavedApiKeys() {
     try {
@@ -501,16 +509,10 @@ try {
         volcanoStatus.className = 'settings-status' + (hasVolcano ? ' configured' : '');
       }
       settingsPanel.classList.add('show');
-      // 通知主进程面板已显示，确保置顶
-      if (window.api && window.api.setPanelVisible) {
-        window.api.setPanelVisible(true);
-      }
+      syncPanelVisibility();
     } else {
       settingsPanel.classList.remove('show');
-      // 通知主进程面板已隐藏
-      if (window.api && window.api.setPanelVisible) {
-        window.api.setPanelVisible(false);
-      }
+      syncPanelVisibility();
     }
   }
 
@@ -679,16 +681,10 @@ try {
     var isVisible = chatPanel.classList.contains('show');
     if (isVisible) {
       chatPanel.classList.remove('show');
-      // 通知主进程面板已隐藏
-      if (window.api && window.api.setPanelVisible) {
-        window.api.setPanelVisible(false);
-      }
+      syncPanelVisibility();
     } else {
       chatPanel.classList.add('show');
-      // 通知主进程面板已显示，确保置顶
-      if (window.api && window.api.setPanelVisible) {
-        window.api.setPanelVisible(true);
-      }
+      syncPanelVisibility();
       // 首次打开加载配置
       if (Object.keys(modelConfigs).length === 0) {
         loadModelConfigs();
@@ -876,10 +872,7 @@ try {
         var panel = document.getElementById('petChatPanel');
         if (panel) {
           panel.classList.remove('show');
-          // 通知主进程面板已关闭
-          if (window.api && window.api.setPanelVisible) {
-            window.api.setPanelVisible(false);
-          }
+          syncPanelVisibility();
         }
       });
     }
@@ -925,10 +918,7 @@ try {
     e.stopPropagation();
     if (chatPanel && chatPanel.classList.contains('show')) {
       chatPanel.classList.remove('show');
-      // 通知主进程面板已关闭
-      if (window.api && window.api.setPanelVisible) {
-        window.api.setPanelVisible(false);
-      }
+      syncPanelVisibility();
       return;
     }
     if (window.api && window.api.hidePet) {

@@ -2,8 +2,10 @@ const { app, BrowserWindow } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const PET_WINDOW_WIDTH = 280;
-const PET_WINDOW_HEIGHT = 340;
+const PET_WINDOW_WIDTH = 220;
+const PET_WINDOW_HEIGHT = 280;
+const PET_PANEL_WIDTH = 440;
+const PET_PANEL_HEIGHT = 600;
 
 app.commandLine.appendSwitch('disable-gpu');
 app.on('window-all-closed', (event) => event.preventDefault());
@@ -59,6 +61,7 @@ async function capture(file, width, height, output, options = {}) {
     petDragging: document.getElementById('petContainer')?.classList.contains('dragging'),
     petClickedMain: window.__petClickedMain || 0,
     petRippleActive: document.getElementById('petImage')?.classList.contains('ripple'),
+    petChatDisplay: getComputedStyle(document.getElementById('petChatPanel') || document.body).display,
     apiMoves: window.__apiMoves || [],
     petMouseModes: window.__petMouseModes || []
     ,functional: window.__functional || null
@@ -123,6 +126,19 @@ app.whenReady().then(async () => {
       wait: 80,
     }),
     await capture('pet.html', PET_WINDOW_WIDTH, PET_WINDOW_HEIGHT, 'pet-ui.png', { frame: false, transparent: true }),
+    await capture('pet.html', PET_PANEL_WIDTH, PET_PANEL_HEIGHT, 'pet-chat-ui.png', {
+      frame: false,
+      transparent: true,
+      action: `(async () => {
+        await new Promise(resolve => setTimeout(resolve, 80));
+        const panel = document.getElementById('petChatPanel');
+        panel.style.animation = 'none';
+        panel.style.opacity = '1';
+        panel.classList.add('show');
+        panel.getBoundingClientRect();
+      })()`,
+      wait: 400,
+    }),
     await capture('pet.html', PET_WINDOW_WIDTH, PET_WINDOW_HEIGHT, 'pet-next-alarm-ui.png', {
       frame: false,
       transparent: true,
@@ -218,8 +234,10 @@ app.whenReady().then(async () => {
       }
       continue;
     }
-    const widthDiff = Math.abs(result.metrics.petBounds.width - PET_WINDOW_WIDTH);
-    const heightDiff = Math.abs(result.metrics.petBounds.height - PET_WINDOW_HEIGHT);
+    const expectedWidth = result.output === 'pet-chat-ui.png' ? PET_PANEL_WIDTH : PET_WINDOW_WIDTH;
+    const expectedHeight = result.output === 'pet-chat-ui.png' ? PET_PANEL_HEIGHT : PET_WINDOW_HEIGHT;
+    const widthDiff = Math.abs(result.metrics.petBounds.width - expectedWidth);
+    const heightDiff = Math.abs(result.metrics.petBounds.height - expectedHeight);
     if (widthDiff > 2 || heightDiff > 2) {
       throw new Error(
         `Pet surface escaped its fixed window contract: ${result.metrics.petBounds.width}x${result.metrics.petBounds.height}`,
@@ -248,6 +266,10 @@ app.whenReady().then(async () => {
     defaultPetResult.metrics.petClosePointerEvents !== 'none'
   ) {
     throw new Error('Pet close button should be hidden until the visible pet is hovered');
+  }
+  const chatPanelResult = results.find((result) => result.output === 'pet-chat-ui.png');
+  if (!chatPanelResult || chatPanelResult.metrics.petChatDisplay !== 'flex') {
+    throw new Error('Pet chat panel did not render in the expanded window');
   }
   const hitTestResult = results.find((result) => result.output === 'pet-click-through-ui.png');
   if (!hitTestResult || hitTestResult.metrics.petMouseModes.join(',') !== 'true,false') {

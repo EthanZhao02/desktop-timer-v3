@@ -122,8 +122,10 @@ loadData();
 
 let autoStartEnabled = data.settings.autoStartEnabled !== false;
 let keepAliveEnabled = data.settings.keepAliveEnabled !== false;
-const PET_WINDOW_WIDTH = 280;
-const PET_WINDOW_HEIGHT = 340;
+const PET_WINDOW_WIDTH = 220;
+const PET_WINDOW_HEIGHT = 280;
+const PET_PANEL_WIDTH = 440;
+const PET_PANEL_HEIGHT = 600;
 function getDefaultRingtoneSrc() {
   return 'file:///' + path.join(__dirname, 'assets', 'default-ringtone.wav').replace(/\\/g, '/');
 }
@@ -237,9 +239,9 @@ function createPetWindow() {
     width: PET_WINDOW_WIDTH,
     height: PET_WINDOW_HEIGHT,
     minWidth: PET_WINDOW_WIDTH,
-    maxWidth: PET_WINDOW_WIDTH,
+    maxWidth: PET_PANEL_WIDTH,
     minHeight: PET_WINDOW_HEIGHT,
-    maxHeight: PET_WINDOW_HEIGHT,
+    maxHeight: PET_PANEL_HEIGHT,
     x: sw - PET_WINDOW_WIDTH - 20,
     y: sh - PET_WINDOW_HEIGHT - 20,
     frame: false,
@@ -261,7 +263,6 @@ function createPetWindow() {
   });
 
   petWindow.loadFile('pet.html');
-  petWindow.on('will-resize', (event) => { event.preventDefault(); });
   petWindow.once('ready-to-show', () => {
     petWindow.show();
     petWindow.setSize(PET_WINDOW_WIDTH, PET_WINDOW_HEIGHT, false);
@@ -281,6 +282,22 @@ function createPetWindow() {
       petWindow.hide();
     }
   });
+}
+
+function resizePetWindow(panelVisible) {
+  if (!petWindow || petWindow.isDestroyed()) return;
+
+  const bounds = petWindow.getBounds();
+  const targetWidth = panelVisible ? PET_PANEL_WIDTH : PET_WINDOW_WIDTH;
+  const targetHeight = panelVisible ? PET_PANEL_HEIGHT : PET_WINDOW_HEIGHT;
+  const display = screen.getDisplayMatching(bounds);
+  const workArea = display.workArea;
+  const right = bounds.x + bounds.width;
+  const bottom = bounds.y + bounds.height;
+  const x = Math.max(workArea.x, Math.min(right - targetWidth, workArea.x + workArea.width - targetWidth));
+  const y = Math.max(workArea.y, Math.min(bottom - targetHeight, workArea.y + workArea.height - targetHeight));
+
+  petWindow.setBounds({ x, y, width: targetWidth, height: targetHeight }, false);
 }
 
 function buildTrayMenu() {
@@ -915,6 +932,7 @@ ipcMain.handle('get-model-configs', () => {
 // �����ʾ/����ʱͻ�����ﴰ�ڣ�ȷ���ɿ���
 ipcMain.on('pet-panel-visible', (event, visible) => {
   if (petWindow && !petWindow.isDestroyed()) {
+    resizePetWindow(Boolean(visible));
     if (visible) {
       // 强化置顶：screen-saver 级别 + moveTop + focus
       petWindow.setAlwaysOnTop(true, 'screen-saver');
@@ -924,4 +942,3 @@ ipcMain.on('pet-panel-visible', (event, visible) => {
     // 关闭面板后保持 screen-saver 级别，不再降级到 normal
   }
 });
-
