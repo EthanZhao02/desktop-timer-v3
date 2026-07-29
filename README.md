@@ -54,10 +54,10 @@
 
 | 平台 | 计时器 | 宠物 UI | 窗口感知姿态 | 锁屏关怀 |
 |------|--------|---------|------------|---------|
-| ✅ **Windows 10/11** | ✅ 完整 | ✅ 完整 | ✅ 完整 | ✅ 完整 | ✅ 完整 |
-| 🟡 **Mac（Beta）** | ✅ 完整 | ✅ 完整 | ⏳ 规划中 | ⏳ 规划中 | ⏳ 规划中 |
+| ✅ **Windows 10/11** | ✅ 完整 | ✅ 完整 | ✅ 完整 | ✅ 完整 |
+| ✅ **macOS 13+** | ✅ 完整 | ✅ 完整 | ➖ Windows 专属 | ✅ 完整 |
 
-> 💡 Mac 版窗口感知、锁屏关怀、星野对话功能正在适配中，敬请期待。
+> 💡 Mac 版提供 Apple Silicon 与 Intel 两种构建。前台窗口姿态识别依赖 Windows API，因此 macOS 暂不支持；其他核心功能可用。
 
 ## 🚀 快速开始
 
@@ -67,8 +67,8 @@
 
 ### Mac 用户
 
-> Mac 版正在开发中，可先 Star 本项目关注进度：
-> [https://github.com/EthanZhao02/desktop-timer-v3/releases](https://github.com/EthanZhao02/desktop-timer-v3/releases)
+> Apple Silicon（M 系列）下载 `macOS-arm64.dmg`，Intel Mac 下载 `macOS-x64.dmg`。
+> 当前版本未经过 Apple 公证；若首次打开被阻止，请前往“系统设置 → 隐私与安全性”选择仍要打开。
 
 ### 开发调试
 

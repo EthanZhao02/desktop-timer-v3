@@ -34,10 +34,15 @@ const packagedPet = asar.extractFile(archive, 'pet.html').toString('utf8');
 const packagedIndex = asar.extractFile(archive, 'index.html').toString('utf8');
 const packagedPetCss = asar.extractFile(archive, 'pet.css').toString('utf8');
 const packagedMain = asar.extractFile(archive, 'main.js').toString('utf8');
+const packagedPackage = JSON.parse(asar.extractFile(archive, 'package.json').toString('utf8'));
+const sourcePackage = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+assert.equal(packagedPackage.version, sourcePackage.version, 'Packaged application version is stale');
 assert.match(packagedMain, /PET_WINDOW_WIDTH\s*=\s*220/, 'Packaged pet window width is stale');
 assert.match(packagedMain, /PET_WINDOW_HEIGHT\s*=\s*280/, 'Packaged pet window height is stale');
 assert.match(packagedMain, /PET_PANEL_WIDTH\s*=\s*440/, 'Packaged pet panel width is stale');
 assert.match(packagedMain, /PET_PANEL_HEIGHT\s*=\s*600/, 'Packaged pet panel height is stale');
+assert.match(packagedMain, /process\.platform\s*!==\s*['"]win32['"]/, 'macOS platform guard is missing');
+assert.ok(sourcePackage.build && sourcePackage.build.mac, 'macOS build configuration is missing');
 assert.match(packagedPetCss, /width:\s*100vw;[\s\S]*height:\s*100vh;/, 'Pet surface contract is missing');
 assert.match(
   asar.extractFile(archive, 'pet.js').toString('utf8'),

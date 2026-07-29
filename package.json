@@ -1,6 +1,6 @@
 {
   "name": "zhiyu-timer",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "智域计时 - 桌面计时器与桌面宠物",
   "main": "main.js",
   "scripts": {
@@ -10,7 +10,9 @@
     "test:ui": "electron tests/capture-ui.js",
     "verify:package": "node tests/verify-package.js",
     "build": "electron-builder",
-    "build-portable": "electron-builder --win portable --x64"
+    "build-portable": "electron-builder --win portable --x64",
+    "build-mac-arm64": "electron-builder --mac dmg zip --arm64",
+    "build-mac-x64": "electron-builder --mac dmg zip --x64"
   },
   "author": "Ethan智域小店",
   "devDependencies": {
@@ -26,6 +28,15 @@
     "win": {
       "target": "portable",
       "icon": "assets/icon.ico"
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "icon": "assets/icon.png",
+      "category": "public.app-category.productivity",
+      "artifactName": "Zhiyu-Timer-${version}-macOS-${arch}.${ext}"
     },
     "files": [
       "main.js",

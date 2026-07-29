@@ -709,6 +709,11 @@ let windowStateInterval = null;
 let isScreenLocked = false;
 
 function setupWindowStateMonitor() {
+  if (process.platform !== 'win32') {
+    safeLog('[main] Active-window pose detection is only available on Windows');
+    return;
+  }
+
   // PowerShell 脚本：获取前台窗口标题、进程名、空闲时间
   const psScript = `
 $ErrorActionPreference = 'SilentlyContinue'

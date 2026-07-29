@@ -1,3 +1,18 @@
+## 智域计时 v1.0.5
+
+### macOS 支持
+- 新增 Apple Silicon（M1/M2/M3/M4/M5）原生构建
+- 新增 Intel Mac x64 构建
+- 同时提供 DMG 安装镜像与 ZIP 便携包
+- macOS 保留计时、闹钟、桌面宠物、托盘、锁屏事件和聊天功能
+- Windows 专属的前台窗口姿态识别在 macOS 上自动停用
+
+### 发布说明
+- Windows 与 macOS 安装包均由 GitHub Actions 从同一标签构建
+- macOS 包暂未使用 Apple Developer 签名和公证，首次打开需在系统隐私与安全设置中允许
+
+---
+
 ## 智域计时 v1.0.4
 
 ### 桌面宠物优化
