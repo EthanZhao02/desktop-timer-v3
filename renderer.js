@@ -77,6 +77,7 @@ window.onerror = function(msg, url, line, col, error) {
 try {
   // ==================== 全局变量 ====================
   var countdownInterval = null;
+  var countdownRunning = false;
   var timerInterval = null;
   var timerStartTime = 0;
   var timerElapsed = 0;
@@ -84,9 +85,40 @@ try {
   var lapCount = 0;
   var laps = [];  // 计次数据
   var alarms = [];
+  var editingAlarmId = null;
+  var focusSessions = [];
   var currentAudio = null;  // 当前播放的音频
+  var currentToneContext = null;
+  var musicLaunchQueued = false;
+  var activeRingingAlarm = null;
+  var alarmCameraStream = null;
+  var alarmFallbackCode = "";
+  var faceLandmarker = null;
+  var faceDetectionFrame = 0;
+  var faceDetectionBusy = false;
+  var blinkSawOpenEyes = false;
+  var blinkVerified = false;
+
+  function setPetActivity(state, source, options) {
+    if (!window.api || !window.api.setPetActivity) return;
+    var payload = {
+      state: state,
+      source: source || 'timer',
+      restoreState: options && options.restoreState ? options.restoreState : 'idle'
+    };
+    if (options && options.duration) payload.duration = options.duration;
+    window.api.setPetActivity(payload);
+  }
+
+  function syncPetWorkState(source) {
+    setPetActivity(timerRunning || countdownRunning ? 'work' : 'idle', source || 'timer');
+  }
+  var currentMusicMode = '';
+  var currentPlaybackCanLaunchMusic = false;
+  var playbackSequence = 0;
   var customRingtoneData = null;
   var customRingtoneName = "";
+  var ringtoneLibrary = [];  // 铃声库列表
   var defaultRingtoneSrc = null;
 
   // ==================== DOM 元素 ====================
@@ -95,6 +127,7 @@ try {
     currentTime: document.getElementById("currentTime"),
     countdownDisplay: document.getElementById("countdownDisplay"),
     countdownLabel: document.getElementById("countdownLabel"),
+    clearCountdownBtn: document.getElementById("clearCountdownBtn"),
     timerDisplay: document.getElementById("timerDisplay"),
     timerMs: document.getElementById("timerMs"),
     timerState: document.getElementById("timerState"),
@@ -107,16 +140,71 @@ try {
     ringtoneName: document.getElementById("ringtoneName"),
     audioControl: document.getElementById("audioControl"),
     audioStatus: document.getElementById("audioStatus"),
+    alarmVerificationOverlay: document.getElementById("alarmVerificationOverlay"),
+    ringingAlarmTime: document.getElementById("ringingAlarmTime"),
+    ringingAlarmTitle: document.getElementById("ringingAlarmTitle"),
+    alarmVerificationHint: document.getElementById("alarmVerificationHint"),
+    alarmCameraPanel: document.getElementById("alarmCameraPanel"),
+    alarmCameraVideo: document.getElementById("alarmCameraVideo"),
+    alarmCameraCanvas: document.getElementById("alarmCameraCanvas"),
+    alarmCameraStatus: document.getElementById("alarmCameraStatus"),
+    alarmFallbackPanel: document.getElementById("alarmFallbackPanel"),
+    alarmFallbackCode: document.getElementById("alarmFallbackCode"),
+    alarmFallbackInput: document.getElementById("alarmFallbackInput"),
+    retryAlarmCameraBtn: document.getElementById("retryAlarmCameraBtn"),
+    verifyAlarmStopBtn: document.getElementById("verifyAlarmStopBtn"),
+    directAlarmStopBtn: document.getElementById("directAlarmStopBtn"),
     clearLapsBtn: document.getElementById("clearLapsBtn"),
     autoStartSetting: document.getElementById("autoStartSetting"),
     keepAliveSetting: document.getElementById("keepAliveSetting"),
+    petAlwaysOnTopSetting: document.getElementById("petAlwaysOnTopSetting"),
+    musicOnAlarmSetting: document.getElementById("musicOnAlarmSetting"),
+    musicAppSelect: document.getElementById("musicAppSelect"),
+    musicAppPathBtn: document.getElementById("musicAppPathBtn"),
+    musicAppStatus: document.getElementById("musicAppStatus"),
+    testMusicAppBtn: document.getElementById("testMusicAppBtn"),
     quitAppBtn: document.getElementById("quitAppBtn"),
-    dataPathInfo: document.getElementById("dataPathInfo")
+    dataPathInfo: document.getElementById("dataPathInfo"),
+    versionInfo: document.getElementById("versionInfo"),
+    openDataFolderBtn: document.getElementById("openDataFolderBtn")
   };
 
   // ==================== 工具函数 ====================
   function pad(n) {
     return n < 10 ? "0" + n : "" + n;
+  }
+
+  function localDayKey(timestamp) {
+    var date = new Date(timestamp);
+    return date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate());
+  }
+
+  function renderFocusSummary() {
+    var today = localDayKey(Date.now());
+    var todaySessions = focusSessions.filter(function(session) {
+      return session && localDayKey(session.completedAt) === today;
+    });
+    var totalMs = todaySessions.reduce(function(total, session) {
+      return total + Number(session.duration || 0);
+    }, 0);
+    var minutes = Math.floor(totalMs / 60000);
+    var timeEl = document.getElementById('todayFocusTime');
+    var countEl = document.getElementById('todayFocusCount');
+    if (timeEl) timeEl.textContent = minutes >= 60
+      ? Math.floor(minutes / 60) + '小时' + (minutes % 60 ? minutes % 60 + '分' : '')
+      : minutes + '分钟';
+    if (countEl) countEl.textContent = todaySessions.length + '次';
+  }
+
+  async function recordFocusSession(duration) {
+    if (duration < 60000) return;
+    var session = { duration: Math.round(duration), completedAt: Date.now() };
+    if (window.api && window.api.addFocusSession) {
+      focusSessions = await window.api.addFocusSession(session) || focusSessions.concat(session);
+    } else {
+      focusSessions.push(session);
+    }
+    renderFocusSummary();
   }
 
   function showNotification(msg) {
@@ -271,27 +359,52 @@ try {
   }
 
   // ==================== 倒计时 ====================
+  var LEGACY_COUNTDOWN_LABELS = ["考研", "考公", "过年", "上班"];
+
+  function clearCountdown(clearInputs) {
+    if (countdownInterval) clearInterval(countdownInterval);
+    countdownInterval = null;
+    countdownRunning = false;
+    el.countdownDisplay.textContent = "00:00:00";
+    el.countdownLabel.textContent = "设置倒计时";
+    el.countdownLabel.className = "countdown-label";
+    el.countdownDisplay.className = "countdown-value";
+    if (el.clearCountdownBtn) el.clearCountdownBtn.classList.add("is-hidden");
+    if (clearInputs) {
+      document.getElementById("customDate").value = "";
+      document.getElementById("customLabel").value = "";
+    }
+    if (window.api && window.api.setCountdown) window.api.setCountdown(null);
+    syncPetWorkState('countdown-clear');
+  }
+
   function startCountdown(targetDate, label) {
     if (countdownInterval) clearInterval(countdownInterval);
+    countdownRunning = true;
+    setPetActivity('work', 'countdown');
     el.countdownLabel.textContent = "距离 " + label + " 还有";
     el.countdownLabel.className = "countdown-label pulse";
     el.countdownDisplay.className = "countdown-value pulse";
+    if (el.clearCountdownBtn) el.clearCountdownBtn.classList.remove("is-hidden");
 
     // 持久化倒计时状态
     if (window.api && window.api.setCountdown) {
       window.api.setCountdown({ targetDate: targetDate.toISOString(), label: label });
     }
 
-    countdownInterval = setInterval(function() {
+    function renderCountdown() {
       var now = new Date();
       var diff = targetDate.getTime() - now.getTime();
 
       if (diff <= 0) {
         clearInterval(countdownInterval);
+        countdownInterval = null;
+        countdownRunning = false;
         el.countdownDisplay.textContent = "时间到！";
         el.countdownLabel.textContent = label;
         el.countdownLabel.className = "countdown-label";
         el.countdownDisplay.className = "countdown-value";
+        if (el.clearCountdownBtn) el.clearCountdownBtn.classList.add("is-hidden");
         playRingtone();
         showNotification(label + " 到了！");
         notifySystem("倒计时提醒", label + " 到了！");
@@ -299,6 +412,10 @@ try {
         if (window.api && window.api.setCountdown) {
           window.api.setCountdown(null);
         }
+        setPetActivity('celebrate', 'countdown-complete', {
+          duration: 8000,
+          restoreState: timerRunning ? 'work' : 'idle'
+        });
         return;
       }
 
@@ -312,67 +429,13 @@ try {
       } else {
         el.countdownDisplay.textContent = pad(hours) + ":" + pad(minutes) + ":" + pad(seconds);
       }
-    }, 1000);
-  }
-
-  function getNextLunarNewYear(now) {
-    var dates = {
-      2026: [1, 17],
-      2027: [1, 6],
-      2028: [0, 26],
-      2029: [1, 13],
-      2030: [1, 3],
-      2031: [0, 23],
-      2032: [1, 11],
-      2033: [0, 31],
-      2034: [1, 19],
-      2035: [1, 8],
-      2036: [0, 28]
-    };
-    for (var y = now.getFullYear(); y <= 2036; y++) {
-      if (!dates[y]) continue;
-      var target = new Date(y, dates[y][0], dates[y][1], 0, 0, 0);
-      if (target > now) return target;
-    }
-    return null;
-  }
-
-  function setupPresets() {
-    var presets = document.querySelectorAll(".preset-btn");
-    for (var i = 0; i < presets.length; i++) {
-      presets[i].onclick = (function(btn) {
-        return function() {
-          var type = btn.getAttribute("data-preset");
-          var now = new Date();
-          var year = now.getFullYear();
-          var target, label;
-
-          if (type === "kaoyan") {
-            target = new Date(year, 11, 21, 0, 0, 0);
-            if (target < now) target = new Date(year + 1, 11, 21, 0, 0, 0);
-            label = "考研";
-          } else if (type === "kaogong") {
-            target = new Date(year, 0, 15, 0, 0, 0);
-            if (target < now) target = new Date(year + 1, 0, 15, 0, 0, 0);
-            label = "考公";
-          } else if (type === "guonian") {
-            target = getNextLunarNewYear(now);
-            if (!target) {
-              showNotification("请用自定义日期设置春节倒计时");
-              return;
-            }
-            label = "过年";
-          } else if (type === "shangban") {
-            target = new Date(year, now.getMonth(), now.getDate(), 9, 0, 0);
-            if (target < now) target.setDate(target.getDate() + 1);
-            label = "上班";
-          }
-
-          if (target) startCountdown(target, label);
-        };
-      })(presets[i]);
     }
 
+    renderCountdown();
+    countdownInterval = setInterval(renderCountdown, 1000);
+  }
+
+  function setupCountdown() {
     document.getElementById("startCountdownBtn").onclick = function() {
       var dateInput = document.getElementById("customDate").value;
       var label = document.getElementById("customLabel").value || "自定义事件";
@@ -390,6 +453,12 @@ try {
 
       startCountdown(target, label);
     };
+
+    if (el.clearCountdownBtn) {
+      el.clearCountdownBtn.onclick = function() {
+        clearCountdown(true);
+      };
+    }
   }
 
   // ==================== 正计时 ====================
@@ -431,8 +500,10 @@ try {
     el.lapList.replaceChildren();
     if (laps.length === 0) {
       el.clearLapsBtn.classList.add("is-hidden");
+      el.lapList.classList.add("is-hidden");
       return;
     }
+    el.lapList.classList.remove("is-hidden");
     for (var i = laps.length - 1; i >= 0; i--) {
       var lap = laps[i];
       var item = document.createElement("div");
@@ -505,6 +576,7 @@ try {
         if (window.api && window.api.setStopwatch) {
           window.api.setStopwatch({ elapsed: timerElapsed, running: true, startTime: timerStartTime });
         }
+        setPetActivity('work', 'stopwatch');
       }
     };
 
@@ -519,10 +591,12 @@ try {
         if (window.api && window.api.setStopwatch) {
           window.api.setStopwatch({ elapsed: timerElapsed, running: false });
         }
+        syncPetWorkState('stopwatch-pause');
       }
     };
 
     resetBtn.onclick = function() {
+      var completedDuration = timerElapsed;
       clearInterval(timerInterval);
       timerRunning = false;
       timerElapsed = 0;
@@ -536,6 +610,8 @@ try {
       if (window.api && window.api.setStopwatch) {
         window.api.setStopwatch(null);
       }
+      syncPetWorkState('stopwatch-reset');
+      recordFocusSession(completedDuration);
     };
 
     lapBtn.onclick = function() {
@@ -557,6 +633,199 @@ try {
     };
 
     el.clearLapsBtn.onclick = clearAllLaps;
+  }
+
+  function stopAlarmCamera() {
+    if (faceDetectionFrame) cancelAnimationFrame(faceDetectionFrame);
+    faceDetectionFrame = 0;
+    faceDetectionBusy = false;
+    if (alarmCameraStream) {
+      alarmCameraStream.getTracks().forEach(function(track) { track.stop(); });
+      alarmCameraStream = null;
+    }
+    if (el.alarmCameraVideo) el.alarmCameraVideo.srcObject = null;
+  }
+
+  function hideAlarmVerification() {
+    stopAlarmCamera();
+    activeRingingAlarm = null;
+    alarmFallbackCode = "";
+    if (el.alarmFallbackInput) el.alarmFallbackInput.value = "";
+    if (el.alarmVerificationOverlay) el.alarmVerificationOverlay.classList.add("is-hidden");
+  }
+
+  function completeAlarmStop() {
+    stopCurrentAudio();
+    finishRingtonePlayback();
+    hideAlarmVerification();
+    showNotification("闹钟已停止");
+  }
+
+  function showAlarmFallback(message) {
+    stopAlarmCamera();
+    alarmFallbackCode = String(Math.floor(1000 + Math.random() * 9000));
+    el.alarmCameraPanel.classList.add("is-hidden");
+    el.alarmFallbackPanel.classList.remove("is-hidden");
+    el.alarmFallbackCode.textContent = alarmFallbackCode;
+    el.alarmVerificationHint.textContent = message || "摄像头不可用，请使用备用验证";
+    el.verifyAlarmStopBtn.textContent = "验证并停止";
+    el.verifyAlarmStopBtn.disabled = false;
+    el.alarmFallbackInput.focus();
+  }
+
+  function describeCameraError(error) {
+    var name = error && error.name;
+    if (name === "NotReadableError" || name === "TrackStartError") {
+      return "摄像头被其他程序占用或硬件隐私开关已关闭，请关闭占用程序后重试";
+    }
+    if (name === "NotAllowedError" || name === "SecurityError") {
+      return "摄像头权限被拒绝，请在 Windows 隐私设置中允许桌面应用访问摄像头";
+    }
+    if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+      return "没有检测到可用摄像头，请检查设备连接";
+    }
+    if (name === "OverconstrainedError") {
+      return "摄像头不支持当前画面参数，请重试";
+    }
+    return "无法使用摄像头，请检查设备和系统权限后重试";
+  }
+
+  function blendshapeScore(categories, name) {
+    for (var i = 0; i < categories.length; i++) {
+      if (categories[i].categoryName === name) return Number(categories[i].score) || 0;
+    }
+    return 0;
+  }
+
+  async function getFaceLandmarker() {
+    if (faceLandmarker) return faceLandmarker;
+    if (!window.Vision || !window.Vision.FilesetResolver || !window.Vision.FaceLandmarker) {
+      throw new Error("mediapipe-unavailable");
+    }
+    var mediaPipeBase = new URL("assets/mediapipe/", window.location.href).href.replace(/\/$/, "");
+    var modelUrl = new URL("assets/mediapipe/face_landmarker.task", window.location.href).href;
+    var fileset = await window.Vision.FilesetResolver.forVisionTasks(mediaPipeBase);
+    faceLandmarker = await window.Vision.FaceLandmarker.createFromOptions(fileset, {
+      baseOptions: {
+        modelAssetPath: modelUrl,
+        delegate: "CPU"
+      },
+      runningMode: "VIDEO",
+      numFaces: 1,
+      outputFaceBlendshapes: true,
+      minFaceDetectionConfidence: 0.55,
+      minFacePresenceConfidence: 0.55,
+      minTrackingConfidence: 0.55
+    });
+    return faceLandmarker;
+  }
+
+  function runBlinkDetection() {
+    if (!alarmCameraStream || blinkVerified) return;
+    faceDetectionFrame = requestAnimationFrame(runBlinkDetection);
+    if (faceDetectionBusy || el.alarmCameraVideo.readyState < 2) return;
+    faceDetectionBusy = true;
+    try {
+      var result = faceLandmarker.detectForVideo(el.alarmCameraVideo, performance.now());
+      var shapes = result.faceBlendshapes && result.faceBlendshapes[0];
+      if (!shapes || !shapes.categories) {
+        el.alarmCameraStatus.textContent = "未检测到人脸，请正对摄像头";
+        return;
+      }
+      var left = blendshapeScore(shapes.categories, "eyeBlinkLeft");
+      var right = blendshapeScore(shapes.categories, "eyeBlinkRight");
+      if (!blinkSawOpenEyes) {
+        if (left < 0.3 && right < 0.3) {
+          blinkSawOpenEyes = true;
+          el.alarmCameraStatus.textContent = "已检测到人脸，请眨一次眼";
+        } else {
+          el.alarmCameraStatus.textContent = "请睁眼并正对摄像头";
+        }
+        return;
+      }
+      if (left > 0.52 && right > 0.52) {
+        blinkVerified = true;
+        el.alarmCameraStatus.textContent = "眨眼验证成功，可以停止闹钟";
+        el.alarmVerificationHint.textContent = "已确认是真人操作，照片不会保存或上传";
+        el.verifyAlarmStopBtn.textContent = "停止闹钟";
+        el.verifyAlarmStopBtn.disabled = false;
+      }
+    } catch (error) {
+      showAlarmFallback("人脸检测运行失败，请使用备用验证码");
+    } finally {
+      faceDetectionBusy = false;
+    }
+  }
+
+  async function startAlarmCamera() {
+    el.alarmCameraPanel.classList.remove("is-hidden");
+    el.alarmFallbackPanel.classList.add("is-hidden");
+    el.alarmCameraStatus.textContent = "正在请求摄像头权限...";
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error("camera-unavailable");
+      alarmCameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
+      el.alarmCameraVideo.srcObject = alarmCameraStream;
+      await el.alarmCameraVideo.play();
+      el.alarmCameraStatus.textContent = "正在加载本地人脸检测模型...";
+      await getFaceLandmarker();
+      el.alarmCameraStatus.textContent = "请睁眼并正对摄像头";
+      runBlinkDetection();
+    } catch (error) {
+      console.error("[Alarm verification] camera failed:", error && error.name, error && error.message);
+      showAlarmFallback(describeCameraError(error));
+    }
+  }
+
+  function showAlarmVerification(alarm) {
+    activeRingingAlarm = alarm || { label: "闹钟", time: "" };
+    var needsPhoto = activeRingingAlarm.requirePhotoVerification === true;
+    el.ringingAlarmTime.textContent = activeRingingAlarm.time || "闹钟";
+    el.ringingAlarmTitle.textContent = activeRingingAlarm.label || "闹钟";
+    el.alarmVerificationOverlay.classList.remove("is-hidden");
+    el.verifyAlarmStopBtn.classList.toggle("is-hidden", !needsPhoto);
+    el.directAlarmStopBtn.classList.toggle("is-hidden", needsPhoto);
+    el.alarmFallbackPanel.classList.add("is-hidden");
+    if (needsPhoto) {
+      blinkSawOpenEyes = false;
+      blinkVerified = false;
+      el.alarmVerificationHint.textContent = "检测到人脸并完成一次眨眼后才能停止";
+      el.verifyAlarmStopBtn.textContent = "完成眨眼后停止";
+      el.verifyAlarmStopBtn.disabled = true;
+      startAlarmCamera();
+    } else {
+      el.alarmCameraPanel.classList.add("is-hidden");
+      el.alarmVerificationHint.textContent = "点击按钮停止本次闹钟";
+    }
+  }
+
+  async function verifyPhotoAndStopAlarm() {
+    if (!activeRingingAlarm) return;
+    if (!el.alarmFallbackPanel.classList.contains("is-hidden")) {
+      if (el.alarmFallbackInput.value.trim() !== alarmFallbackCode) {
+        el.alarmVerificationHint.textContent = "验证码不正确，请重新输入";
+        el.alarmFallbackInput.select();
+        return;
+      }
+      completeAlarmStop();
+      return;
+    }
+    if (!blinkVerified) return;
+    completeAlarmStop();
+  }
+
+  function setupAlarmVerification() {
+    el.verifyAlarmStopBtn.onclick = verifyPhotoAndStopAlarm;
+    el.directAlarmStopBtn.onclick = completeAlarmStop;
+    el.retryAlarmCameraBtn.onclick = function() {
+      blinkSawOpenEyes = false;
+      blinkVerified = false;
+      el.verifyAlarmStopBtn.disabled = true;
+      el.verifyAlarmStopBtn.textContent = "完成眨眼后停止";
+      startAlarmCamera();
+    };
+    el.alarmFallbackInput.onkeydown = function(event) {
+      if (event.key === "Enter") verifyPhotoAndStopAlarm();
+    };
   }
 
   // ==================== 闹钟 ====================
@@ -590,7 +859,18 @@ try {
 
       var label = document.createElement("div");
       label.className = "alarm-label-text";
-      label.textContent = (a.label || "") + (a.repeat ? " · 每天" : "");
+      var labelText = (a.label || "") + (a.repeat ? " · 每天" : "");
+      if (a.ringtone || a.musicMode || a.requirePhotoVerification) {
+        var tags = [];
+        if (a.ringtone) {
+          var rt = ringtoneLibrary.find(r => r.key === a.ringtone);
+          tags.push("[铃声]" + (rt ? rt.name : "自定义"));
+        }
+        if (a.musicMode) tags.push("[场景]" + a.musicMode);
+        if (a.requirePhotoVerification) tags.push("[拍照验证]");
+        labelText += "  " + tags.join("  ");
+      }
+      label.textContent = labelText;
 
       var actions = document.createElement("div");
       actions.className = "alarm-actions";
@@ -605,6 +885,15 @@ try {
         return function() { toggleAlarm(id); };
       })(Number(a.id));
 
+      var editButton = document.createElement("button");
+      editButton.className = "edit-alarm";
+      editButton.type = "button";
+      editButton.title = "编辑闹钟";
+      editButton.textContent = "编辑";
+      editButton.onclick = (function(id) {
+        return function() { editAlarm(id); };
+      })(Number(a.id));
+
       var deleteButton = document.createElement("button");
       deleteButton.className = "delete-alarm";
       deleteButton.type = "button";
@@ -615,7 +904,7 @@ try {
       })(Number(a.id));
 
       info.append(time, label);
-      actions.append(toggle, deleteButton);
+      actions.append(toggle, editButton, deleteButton);
       item.append(info, actions);
       el.alarmList.appendChild(item);
     }
@@ -644,36 +933,75 @@ try {
     showNotification("闹钟已删除");
   }
 
+  function resetAlarmForm() {
+    editingAlarmId = null;
+    document.getElementById("alarmTime").value = "";
+    document.getElementById("alarmLabel").value = "";
+    document.getElementById("repeatDaily").checked = false;
+    document.getElementById("alarmPhotoVerification").checked = false;
+    document.getElementById("alarmMusicMode").value = "";
+    document.getElementById("alarmRingtone").value = "";
+    document.getElementById("addAlarmBtn").textContent = "添加闹钟";
+    document.getElementById("cancelAlarmEditBtn").classList.add("is-hidden");
+  }
+
+  function editAlarm(id) {
+    var alarm = alarms.find(function(item) { return Number(item.id) === Number(id); });
+    if (!alarm) return;
+    editingAlarmId = Number(alarm.id);
+    document.getElementById("alarmTime").value = alarm.time || "";
+    document.getElementById("alarmLabel").value = alarm.label || "";
+    document.getElementById("repeatDaily").checked = !!alarm.repeat;
+    document.getElementById("alarmPhotoVerification").checked = !!alarm.requirePhotoVerification;
+    document.getElementById("alarmMusicMode").value = alarm.musicMode || "";
+    document.getElementById("alarmRingtone").value = alarm.ringtone || "";
+    document.getElementById("addAlarmBtn").textContent = "保存修改";
+    document.getElementById("cancelAlarmEditBtn").classList.remove("is-hidden");
+    document.getElementById("alarmTime").focus();
+  }
+
   function setupAlarm() {
     document.getElementById("addAlarmBtn").onclick = function() {
       var timeInput = document.getElementById("alarmTime").value;
       var labelInput = document.getElementById("alarmLabel").value;
       var repeat = document.getElementById("repeatDaily").checked;
+      var requirePhotoVerification = document.getElementById("alarmPhotoVerification").checked;
 
       if (!timeInput) {
         showNotification("请选择闹钟时间");
         return;
       }
 
+      var modeSelect = document.getElementById("alarmMusicMode");
+      var modeInput = modeSelect.disabled ? "" : modeSelect.value;
+      var ringtoneInput = document.getElementById("alarmRingtone").value;
       var alarm = {
-        id: Date.now(),
+        id: editingAlarmId || Date.now(),
         time: timeInput,
         label: labelInput || "闹钟",
         repeat: repeat,
+        requirePhotoVerification: requirePhotoVerification,
         enabled: true,
-        triggered: false
+        triggered: false,
+        musicMode: modeInput || '',
+        ringtone: ringtoneInput || ''
       };
 
-      alarms.push(alarm);
+      if (editingAlarmId) {
+        alarms = alarms.map(function(item) {
+          return Number(item.id) === editingAlarmId ? alarm : item;
+        });
+      } else {
+        alarms.push(alarm);
+      }
       saveAlarms();
       renderAlarms();
 
-      document.getElementById("alarmTime").value = "";
-      document.getElementById("alarmLabel").value = "";
-      document.getElementById("repeatDaily").checked = false;
-
-      showNotification("闹钟已添加：" + alarm.time);
+      var wasEditing = editingAlarmId !== null;
+      resetAlarmForm();
+      showNotification(wasEditing ? "闹钟已更新：" + alarm.time : "闹钟已添加：" + alarm.time);
     };
+    document.getElementById("cancelAlarmEditBtn").onclick = resetAlarmForm;
   }
 
   function checkAlarms() {
@@ -684,7 +1012,14 @@ try {
       var alarm = alarms[i];
       if (alarm.enabled && alarm.time === currentTime && !alarm.triggered) {
         alarm.triggered = true;
-        playRingtone();
+        currentMusicMode = alarm.musicMode || '';
+        currentPlaybackCanLaunchMusic = true;
+        if (alarm.ringtone) {
+          var rt = ringtoneLibrary.find(r => r.key === alarm.ringtone);
+          playRingtone(rt ? rt.src : null, { source: 'alarm', musicMode: currentMusicMode, alarm: alarm });
+        } else {
+          playRingtone(null, { source: 'alarm', musicMode: currentMusicMode, alarm: alarm });
+        }
         showNotification(alarm.label);
         if (!alarm.repeat) {
           alarm.enabled = false;
@@ -716,18 +1051,60 @@ try {
       } catch (e) {}
       currentAudio = null;
     }
+    if (currentToneContext) {
+      try { currentToneContext.close(); } catch (e) {}
+      currentToneContext = null;
+    }
     el.audioControl.className = "audio-control";
     if (window._audioTimeout) {
       clearTimeout(window._audioTimeout);
       window._audioTimeout = null;
     }
+    if (window._audioStopTimeout) {
+      clearTimeout(window._audioStopTimeout);
+      window._audioStopTimeout = null;
+    }
   }
 
-  function playRingtone(src) {
+  // 起床听歌：铃声播放结束后自动打开所选音乐应用（可按闹钟指定汽水场景）
+  function maybeLaunchMusic(mode) {
+    if (musicLaunchQueued) return;
+    musicLaunchQueued = true;
+    if (!el.musicOnAlarmSetting || !el.musicOnAlarmSetting.checked) return;
+    if (!window.api || !window.api.openMusicApp) return;
+    window.api.openMusicApp({ musicMode: mode || '' }).then(function(res) {
+      if (!res) return;
+      if (res.success) {
+        if (res.modeSelected) {
+          showNotification("已打开汽水音乐，进入" + (mode || "起床") + "模式");
+        } else {
+          showNotification(res.alreadyRunning ? "音乐应用已在运行，开始播放" : "已打开音乐应用，开始播放");
+        }
+      } else if (res.reason === "not-found") {
+        showNotification("未找到音乐应用，请在设置中选择");
+      } else if (res.reason === "launch-failed") {
+        showNotification("音乐应用启动失败");
+      }
+    });
+  }
+
+  function finishRingtonePlayback(playbackId) {
+    if (playbackId !== undefined && playbackId !== playbackSequence) return;
+    if (currentPlaybackCanLaunchMusic) maybeLaunchMusic(currentMusicMode);
+  }
+
+  function playRingtone(src, options) {
     // 停止之前的声音
     stopCurrentAudio();
+    musicLaunchQueued = false;
+    currentPlaybackCanLaunchMusic = !!(options && options.source === 'alarm');
+    currentMusicMode = options && options.musicMode ? options.musicMode : '';
+    var ringingAlarm = options && options.alarm ? options.alarm : null;
+    var requiresVerification = !!(ringingAlarm && ringingAlarm.requirePhotoVerification);
+    if (ringingAlarm) showAlarmVerification(ringingAlarm);
+    var playbackId = ++playbackSequence;
 
-    var mode = getPlayMode();
+    var mode = requiresVerification ? "manual" : getPlayMode();
     var playSrc = src || customRingtoneData || defaultRingtoneSrc;
     console.log("[Audio] playRingtone called, mode=" + mode + ", hasSrc=" + !!playSrc + ", srcLen=" + (playSrc ? playSrc.length : 0));
     el.audioStatus.textContent = "正在播放...";
@@ -753,6 +1130,7 @@ try {
 
         currentAudio.onended = function() {
           el.audioStatus.textContent = "✓ 播放完毕";
+          finishRingtonePlayback(playbackId);
           setTimeout(function() {
             el.audioControl.className = "audio-control";
           }, 2000);
@@ -760,35 +1138,43 @@ try {
 
         currentAudio.onerror = function() {
           el.audioStatus.textContent = "✗ 播放错误，使用默认提示音";
-          playDefaultSound(mode);
+          playDefaultSound(mode, playbackId);
         };
 
         currentAudio.play().catch(function(err) {
           el.audioStatus.textContent = "播放失败";
           console.error("[Audio] play() failed:", err.message, err.name);
-          playDefaultSound(mode);
+          playDefaultSound(mode, playbackId);
         });
 
         // 根据模式设置停止时间
         if (mode === "30s") {
-          window._audioTimeout = setTimeout(stopCurrentAudio, 30000);
+          window._audioTimeout = setTimeout(function() {
+            stopCurrentAudio();
+            finishRingtonePlayback(playbackId);
+          }, 30000);
         } else if (mode === "60s") {
-          window._audioTimeout = setTimeout(stopCurrentAudio, 60000);
+          window._audioTimeout = setTimeout(function() {
+            stopCurrentAudio();
+            finishRingtonePlayback(playbackId);
+          }, 60000);
         }
         // "full" 播放完整音频，"manual" 循环直到手动停止
 
       } catch (e) {
-        playDefaultSound(mode);
+        playDefaultSound(mode, playbackId);
       }
     } else {
-      playDefaultSound(mode);
+      playDefaultSound(mode, playbackId);
     }
   }
 
-  function playDefaultSound(mode) {
+  function playDefaultSound(mode, playbackId) {
+    if (playbackId !== playbackSequence) return;
     try {
       console.log("[Audio] playDefaultSound called, mode=" + mode);
       var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      currentToneContext = audioCtx;
       if (audioCtx.state === "suspended") audioCtx.resume();
       var oscillator = audioCtx.createOscillator();
       var gainNode = audioCtx.createGain();
@@ -806,51 +1192,120 @@ try {
       el.audioStatus.textContent = "✓ 提示音播放完毕";
       if (mode === "30s" || mode === "60s" || mode === "manual") {
         window._audioTimeout = setTimeout(function() {
-          playDefaultSound(mode);
+          playDefaultSound(mode, playbackId);
         }, 2200);
-        if (mode === "30s") setTimeout(stopCurrentAudio, 30000);
-        if (mode === "60s") setTimeout(stopCurrentAudio, 60000);
+        if ((mode === "30s" || mode === "60s") && !window._audioStopTimeout) {
+          window._audioStopTimeout = setTimeout(function() {
+            stopCurrentAudio();
+            finishRingtonePlayback(playbackId);
+          }, mode === "30s" ? 30000 : 60000);
+        }
       } else {
         setTimeout(function() {
           el.audioControl.className = "audio-control";
         }, 2500);
+        setTimeout(function() { finishRingtonePlayback(playbackId); }, 2000);
       }
     } catch (e) {}
   }
 
-  function setupRingtone() {
-    document.getElementById("selectRingtoneBtn").onclick = function() {
-      document.getElementById("ringtoneFile").click();
-    };
+  async function loadRingtoneLibrary() {
+    try {
+      if (window.api && window.api.getRingtoneLibrary) {
+        ringtoneLibrary = await window.api.getRingtoneLibrary() || [];
+      }
+    } catch (e) {
+      ringtoneLibrary = [];
+    }
+    var sel = document.getElementById("alarmRingtone");
+    if (sel) {
+      var cur = sel.value;
+      sel.innerHTML = '<option value="">默认铃声</option>';
+      for (var i = 0; i < ringtoneLibrary.length; i++) {
+        var opt = document.createElement("option");
+        opt.value = ringtoneLibrary[i].key;
+        opt.textContent = ringtoneLibrary[i].name;
+        sel.appendChild(opt);
+      }
+      sel.value = cur;
+    }
+    // 渲染设置里的铃声库列表
+    var listEl = document.getElementById("ringtoneLibraryList");
+    if (listEl) {
+      listEl.innerHTML = "";
+      if (ringtoneLibrary.length === 0) {
+        listEl.textContent = "铃声库为空，点下面按钮添加";
+      } else {
+        for (var i = 0; i < ringtoneLibrary.length; i++) {
+          var item = document.createElement("div");
+          item.className = "ringtone-library-item";
+          var nameEl = document.createElement("span");
+          nameEl.className = "name";
+          nameEl.textContent = ringtoneLibrary[i].name;
+          var delBtn = document.createElement("button");
+          delBtn.className = "btn btn-small btn-danger";
+          delBtn.textContent = "删除";
+          delBtn.onclick = (function(key) {
+            return async function() {
+              if (window.api && window.api.removeRingtoneFromLibrary) {
+                await window.api.removeRingtoneFromLibrary(key);
+                await loadRingtoneLibrary();
+                renderAlarms();
+              }
+            };
+          })(ringtoneLibrary[i].key);
+          item.append(nameEl, delBtn);
+          listEl.appendChild(item);
+        }
+      }
+    }
+  }
 
-    document.getElementById("ringtoneFile").onchange = function(e) {
-      var file = e.target.files[0];
-      if (!file) return;
-      if (!/\.(wav|mp3)$/i.test(file.name)) {
-        showNotification("请选择 WAV 或 MP3 铃声文件");
-        e.target.value = "";
-        return;
-      }
-      if (file.size > 5 * 1024 * 1024) {
-        showNotification("铃声文件太大，请选择不超过 5MB 的文件");
-        e.target.value = "";
-        return;
-      }
-      var reader = new FileReader();
-      reader.onload = async function(event) {
-        try {
-          customRingtoneData = event.target.result;
-          customRingtoneName = file.name;
-          if (window.api && window.api.setRingtone) {
-            await window.api.setRingtone({ src: customRingtoneData, name: customRingtoneName });
-          }
-          el.ringtoneName.textContent = "已选择: " + file.name;
-          showNotification("铃声已更换，播放闹钟时会使用");
-        } catch (err) {
-          showNotification("铃声文件太大，请选择小于5MB的文件");
+  function setupRingtone() {
+    // 添加铃声到库
+    var addBtn = document.getElementById("addRingtoneBtn");
+    if (addBtn) {
+      addBtn.onclick = async function() {
+        if (!window.api || !window.api.addRingtoneToLibrary) return;
+        var res = await window.api.addRingtoneToLibrary();
+        if (res && res.ok) {
+          showNotification("已添加：" + res.ringtone.name);
+          await loadRingtoneLibrary();
+        } else if (res && res.canceled) {
+          // 取消
+        } else if (res && res.error === "too-large") {
+          showNotification("铃声太大，最大 100MB");
+        } else {
+          showNotification("添加失败");
         }
       };
-      reader.readAsDataURL(file);
+    }
+
+    document.getElementById("selectRingtoneBtn").onclick = async function() {
+      if (!window.api || !window.api.pickRingtoneFile) {
+        showNotification("当前版本不支持，请重启程序");
+        return;
+      }
+      try {
+        var res = await window.api.pickRingtoneFile();
+        if (res && res.canceled) return;
+        if (res && res.ok) {
+          customRingtoneData = res.src;
+          customRingtoneName = res.name || "自定义铃声";
+          el.ringtoneName.textContent = "已选择: " + customRingtoneName;
+          showNotification("铃声已更换，播放闹钟时会使用");
+          return;
+        }
+        if (res && res.error === "too-large") {
+          showNotification("铃声文件太大，请选择不超过 100MB 的文件");
+        } else if (res && res.error === "bad-format") {
+          showNotification("请选择 WAV 或 MP3 铃声文件");
+        } else {
+          showNotification("铃声设置失败，请重试");
+        }
+      } catch (err) {
+        showNotification("铃声设置失败，请重试");
+      }
     };
 
     // 显示已选择的铃声
@@ -858,14 +1313,26 @@ try {
       el.ringtoneName.textContent = "已选择: " + customRingtoneName;
     }
 
-    // 停止按钮
-    document.getElementById("stopAudioBtn").onclick = stopCurrentAudio;
+    // 停止按钮：手动停止铃声 = 铃声结束，同样触发起床听歌
+    document.getElementById("stopAudioBtn").onclick = function() {
+      if (activeRingingAlarm && activeRingingAlarm.requirePhotoVerification) {
+        showAlarmVerification(activeRingingAlarm);
+        return;
+      }
+      stopCurrentAudio();
+      finishRingtonePlayback();
+      hideAlarmVerification();
+    };
   }
 
   async function setupSettings() {
     if (!window.api || !window.api.getSettings) {
       el.autoStartSetting.disabled = true;
       el.keepAliveSetting.disabled = true;
+      el.petAlwaysOnTopSetting.disabled = true;
+      el.musicOnAlarmSetting.disabled = true;
+      el.musicAppSelect.disabled = true;
+      el.musicAppPathBtn.disabled = true;
       el.quitAppBtn.classList.add("is-hidden");
       return;
     }
@@ -873,14 +1340,128 @@ try {
     var settings = await window.api.getSettings();
     el.autoStartSetting.checked = !!settings.autoStartEnabled;
     el.keepAliveSetting.checked = !!settings.keepAliveEnabled;
+    el.petAlwaysOnTopSetting.checked = !!settings.petAlwaysOnTop;
     if (settings.dataFile) {
       el.dataPathInfo.textContent = "数据文件：" + settings.dataFile;
+    }
+    if (el.versionInfo) {
+      el.versionInfo.textContent = "版本：" + (settings.version || "未知") + " · 日志：" + (settings.logFile || "不可用");
+    }
+    if (el.openDataFolderBtn) {
+      el.openDataFolderBtn.onclick = async function() {
+        var result = await window.api.openDataFolder();
+        if (result && !result.success) showNotification("目录打开失败");
+      };
+    }
+
+    // ==================== 起床听歌 ====================
+    var MUSIC_APP_LABELS = { netease: "网易云音乐", kugou: "酷狗音乐", qishui: "汽水音乐", custom: "自定义应用" };
+    var musicPlatformSupported = true;
+    function isQishuiMusicSetting(ms) {
+      if (!ms) return false;
+      if (ms.app === "qishui") return true;
+      return ms.app === "custom" && /(?:soda|qishui|ssmusic|汽水)/i.test(ms.customPath || "");
+    }
+    function syncSceneModeControl(ms) {
+      var select = document.getElementById("alarmMusicMode");
+      var hint = document.getElementById("alarmMusicModeHint");
+      var supported = isQishuiMusicSetting(ms);
+      if (select) select.disabled = !supported;
+      if (hint) {
+        hint.textContent = supported
+          ? "将尝试切换汽水音乐场景；汽水界面更新后可能需要重新校准"
+          : "当前音乐应用不支持场景切换，仅会启动并尝试播放";
+        hint.classList.toggle("is-warning", !supported);
+      }
+    }
+    function renderMusicStatus(ms) {
+      if (!ms) return;
+      var label = MUSIC_APP_LABELS[ms.app] || "音乐应用";
+      if (ms.app === "custom") {
+        el.musicAppStatus.textContent = ms.customPath ? "路径：" + ms.customPath : "尚未选择应用";
+      } else if (ms.foundPath) {
+        el.musicAppStatus.textContent = label + " 已找到：" + ms.foundPath;
+      } else {
+        el.musicAppStatus.textContent = label + " 未找到，请选择" + label + "（或改用自定义应用）";
+      }
+    }
+  function refreshMusicControls(ms) {
+    if (typeof ms.platformSupported === "boolean") musicPlatformSupported = ms.platformSupported;
+    var platformSupported = musicPlatformSupported;
+    if (!platformSupported) {
+      el.musicOnAlarmSetting.checked = false;
+      el.musicOnAlarmSetting.disabled = true;
+      el.musicAppSelect.disabled = true;
+      el.musicAppPathBtn.disabled = true;
+      el.musicAppStatus.textContent = "音乐应用自动启动与场景切换目前仅支持 Windows；Mac 版仍可使用闹钟歌曲。";
+      return;
+    }
+      el.musicOnAlarmSetting.checked = !!ms.on;
+      el.musicAppSelect.value = ms.app || "netease";
+      el.musicAppSelect.disabled = !ms.on;
+      el.musicAppPathBtn.disabled = !ms.on || (ms.app || "netease") !== "custom";
+      renderMusicStatus(ms);
+      syncSceneModeControl(ms);
+    }
+    var musicSettings = await window.api.getMusicSettings();
+    refreshMusicControls(musicSettings);
+
+    async function saveMusicSettings(next) {
+      var res = await window.api.setMusicSettings(next);
+      if (res) refreshMusicControls(res);
+      showNotification("设置已保存");
+    }
+
+    el.musicOnAlarmSetting.onchange = function() {
+      var on = el.musicOnAlarmSetting.checked;
+      el.musicAppSelect.disabled = !on;
+      el.musicAppPathBtn.disabled = !on || el.musicAppSelect.value !== "custom";
+      saveMusicSettings({ on: on });
+    };
+    el.musicAppSelect.onchange = function() {
+      var app = el.musicAppSelect.value;
+      el.musicAppPathBtn.disabled = app !== "custom";
+      saveMusicSettings({ app: app });
+    };
+    el.musicAppPathBtn.onclick = async function() {
+      var picked = await window.api.pickMusicApp();
+      if (picked && !picked.canceled && picked.path) {
+        saveMusicSettings({ customPath: picked.path });
+      }
+    };
+    if (el.testMusicAppBtn) {
+      el.testMusicAppBtn.onclick = async function() {
+        var modeSelect = document.getElementById("alarmMusicMode");
+        var mode = modeSelect && !modeSelect.disabled ? (modeSelect.value || "起床") : "";
+        el.testMusicAppBtn.disabled = true;
+        el.testMusicAppBtn.textContent = "正在测试...";
+        try {
+          var res = await window.api.openMusicApp({ musicMode: mode, forcePlay: true });
+          if (res && res.success && res.modeSelected) {
+            showNotification("汽水音乐已进入" + mode + "场景");
+          } else if (res && res.success && res.sceneSupported) {
+            showNotification("汽水音乐已打开，但场景切换失败");
+          } else if (res && res.success) {
+            showNotification("音乐应用已启动；是否播放取决于应用当前状态");
+          } else if (res && res.reason === "disabled") {
+            showNotification("请先开启“铃声播完后自动打开音乐播放”");
+          } else if (res && res.reason === "not-found") {
+            showNotification("没有找到所选音乐应用");
+          } else {
+            showNotification("音乐应用测试失败");
+          }
+        } finally {
+          el.testMusicAppBtn.disabled = false;
+          el.testMusicAppBtn.textContent = "测试启动与播放";
+        }
+      };
     }
 
     async function saveSettings() {
       var next = {
         autoStartEnabled: el.autoStartSetting.checked,
-        keepAliveEnabled: el.keepAliveSetting.checked
+        keepAliveEnabled: el.keepAliveSetting.checked,
+        petAlwaysOnTop: el.petAlwaysOnTopSetting.checked
       };
       await window.api.setSettings(next);
       showNotification("设置已保存");
@@ -888,6 +1469,7 @@ try {
 
     el.autoStartSetting.onchange = saveSettings;
     el.keepAliveSetting.onchange = saveSettings;
+    el.petAlwaysOnTopSetting.onchange = saveSettings;
     el.quitAppBtn.onclick = function() {
       if (confirm("确定彻底退出智域计时吗？")) {
         window.api.quitApp();
@@ -898,6 +1480,14 @@ try {
       window.api.onSettingsUpdated(function(nextSettings) {
         el.autoStartSetting.checked = !!nextSettings.autoStartEnabled;
         el.keepAliveSetting.checked = !!nextSettings.keepAliveEnabled;
+        el.petAlwaysOnTopSetting.checked = !!nextSettings.petAlwaysOnTop;
+        if (nextSettings && typeof nextSettings.musicOnAlarm !== "undefined") {
+          refreshMusicControls({
+            on: !!nextSettings.musicOnAlarm,
+            app: nextSettings.musicApp || "netease",
+            customPath: nextSettings.musicAppPath || ""
+          });
+        }
       });
     }
   }
@@ -905,8 +1495,12 @@ try {
   function setupMainProcessEvents() {
     if (!window.api) return;
     if (window.api.onPlayRingtone) {
-      window.api.onPlayRingtone(function(src) {
-        playRingtone(src);
+      window.api.onPlayRingtone(function(payload) {
+        if (payload && typeof payload === "object") {
+          playRingtone(payload.src, { source: payload.source, musicMode: payload.musicMode, alarm: payload.alarm });
+        } else {
+          playRingtone(payload);
+        }
       });
     }
     if (window.api.onAlarmTriggered) {
@@ -1080,6 +1674,10 @@ try {
       if (!window.api || !window.api.getCountdown) return;
       var savedCountdown = await window.api.getCountdown();
       if (!savedCountdown || !savedCountdown.targetDate) return;
+      if (LEGACY_COUNTDOWN_LABELS.indexOf(savedCountdown.label) !== -1) {
+        clearCountdown(true);
+        return;
+      }
       var target = new Date(savedCountdown.targetDate);
       if (target > new Date()) {
         startCountdown(target, savedCountdown.label || "\u81ea\u5b9a\u4e49\u4e8b\u4ef6");
@@ -1106,13 +1704,16 @@ try {
         timerRunning = true;
         applyStopwatchControls("running");
         updateTimer();
+        setPetActivity('work', 'stopwatch-restore');
       } else if (savedSw.elapsed > 0) {
         timerRunning = false;
         renderStopwatchElapsed(savedSw.elapsed);
         applyStopwatchControls("paused");
+        syncPetWorkState('stopwatch-restore-paused');
       } else {
         timerRunning = false;
         applyStopwatchControls("ready");
+        syncPetWorkState('stopwatch-restore-ready');
       }
     } catch (e) {}
   }
@@ -1139,17 +1740,66 @@ try {
       };
     }
 
-    // ESC 关闭
-    document.addEventListener("keydown", function(e) {
-      if (e.key === "Escape" && overlay && overlay.className.indexOf("show") !== -1) {
-        closeSettings();
-      }
+    // ===== 设置选项卡切换 =====
+    var stabBtns = document.querySelectorAll('#settingsTabs .settings-tab');
+    stabBtns.forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        stabBtns.forEach(function(b){ b.classList.remove('active'); });
+        document.querySelectorAll('.settings-tabpage').forEach(function(p){ p.classList.remove('active'); });
+        btn.classList.add('active');
+        var pg = document.getElementById('stab-' + btn.dataset.stab);
+        if (pg) pg.classList.add('active');
+      });
     });
+
+    // ===== 宠物走路参数：写 localStorage，宠物窗口监听 storage 实时生效 =====
+    var PET_KEYS = { walkSpeed:'petWalkSpeed', walkAmp:'petWalkAmp', walkKnee:'petWalkKnee' };
+    Object.keys(PET_KEYS).forEach(function(id){
+      var el = document.getElementById(id);
+      var key = PET_KEYS[id];
+      var saved = localStorage.getItem(key);
+      if (el && saved !== null) {
+        el.value = saved;
+        var out = document.getElementById(id+'Val');
+        if (out) out.textContent = saved;
+      }
+      if (el) el.addEventListener('input', function(){
+        var o = document.getElementById(id+'Val');
+        if (o) o.textContent = el.value;
+        localStorage.setItem(key, el.value);
+      });
+    });
+    var petAutoChk = document.getElementById('petAutoMotionSetting');
+    if (petAutoChk) {
+      petAutoChk.checked = localStorage.getItem('petAutoMotion') !== 'false';
+      petAutoChk.addEventListener('change', function(){
+        localStorage.setItem('petAutoMotion', petAutoChk.checked ? 'true' : 'false');
+      });
+    }
+    var petMotionMode = document.getElementById('petMotionModeSetting');
+    if (petMotionMode) {
+      var savedMotionMode = localStorage.getItem('petMotionMode');
+      petMotionMode.value = /^(mixed|roam|march)$/.test(savedMotionMode || '') ? savedMotionMode : 'mixed';
+      petMotionMode.addEventListener('change', function(){
+        localStorage.setItem('petMotionMode', petMotionMode.value);
+      });
+    }
+    var petPrevBtn = document.getElementById('walkPreviewBtn');
+    if (petPrevBtn) {
+      petPrevBtn.addEventListener('click', function(){
+        localStorage.setItem('petWalkPreview', String(Date.now()));
+      });
+    }
   }
 
   // ==================== 初始化 ====================
   async function init() {
     await loadSavedData();
+
+    if (window.api && window.api.getFocusSessions) {
+      focusSessions = await window.api.getFocusSessions() || [];
+    }
+    renderFocusSummary();
 
     await restoreCountdownState();
     await restoreStopwatchState();
@@ -1160,10 +1810,12 @@ try {
     setupWarningPanel();
     setupMainProcessEvents();
     setupTabs();
-    setupPresets();
+    setupCountdown();
     setupTimer();
     setupAlarm();
+    setupAlarmVerification();
     setupRingtone();
+    loadRingtoneLibrary();
     await setupSettings();
     setupMinimize();
     setupTheme();

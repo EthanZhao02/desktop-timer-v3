@@ -24,6 +24,9 @@ dev-log.md
 node_modules/
 package-lock.json
 
+# === Local runtime data (never commit) ===
+data/
+
 # === Electron 构建产物 ===
 *.asar
 *.asar.unpacked

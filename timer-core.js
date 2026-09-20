@@ -9,11 +9,22 @@ const DEFAULT_DATA = Object.freeze({
   lastFired: {},
   countdown: null,
   stopwatch: null,
+  focusSessions: [],
   settings: {
     autoStartEnabled: false,
     keepAliveEnabled: false,
   },
 });
+
+// 自定义铃声上传大小上限：100 MB
+const MAX_RINGTONE_BYTES = 100 * 1024 * 1024;
+const MUSIC_MODES = new Set(['熟悉模式', '新鲜模式', '起床', '洗澡', '图书馆', '动感健身', '深夜EMO', 'DJ模式', '助眠模式']);
+const MUSIC_APPS = new Set(['netease', 'kugou', 'qishui', 'custom']);
+
+function normalizeRingtoneKey(value) {
+  if (typeof value !== 'string' || !value) return '';
+  return /^[a-zA-Z0-9_\-.\u4e00-\u9fa5]+\.(?:mp3|wav)$/i.test(value) ? value : '';
+}
 
 function localDateKey(date) {
   const year = date.getFullYear();
@@ -40,7 +51,7 @@ function validateRingtone(value) {
   const payload = value.slice(value.indexOf(',') + 1);
   const padding = payload.endsWith('==') ? 2 : payload.endsWith('=') ? 1 : 0;
   const byteLength = Math.floor(payload.length * 3 / 4) - padding;
-  if (byteLength > 5 * 1024 * 1024) throw new Error('Ringtone must not exceed 5 MB');
+  if (byteLength > MAX_RINGTONE_BYTES) throw new Error('Ringtone must not exceed 100 MB');
   return value;
 }
 
@@ -99,6 +110,11 @@ function normalizeImportedData(value) {
       label: typeof alarm.label === 'string' ? alarm.label.slice(0, 200) : '闹钟',
       repeat: alarm.repeat === true,
       enabled: alarm.enabled !== false,
+      requirePhotoVerification: alarm.requirePhotoVerification === true,
+      ringtone: normalizeRingtoneKey(alarm.ringtone),
+      musicMode: alarm.musicMode === '图书馆'
+        ? '动感健身'
+        : (MUSIC_MODES.has(alarm.musicMode) ? alarm.musicMode : ''),
     };
   });
   if (value.laps !== undefined && !Array.isArray(value.laps)) {
@@ -109,6 +125,9 @@ function normalizeImportedData(value) {
   return {
     alarms,
     laps: Array.isArray(value.laps) ? value.laps.slice(0, 99) : [],
+    focusSessions: Array.isArray(value.focusSessions)
+      ? value.focusSessions.filter((session) => session && Number.isFinite(Number(session.duration)) && Number.isFinite(Number(session.completedAt))).slice(-500)
+      : [],
     countdown: value.countdown && typeof value.countdown === 'object' ? value.countdown : null,
     stopwatch: value.stopwatch && typeof value.stopwatch === 'object' ? value.stopwatch : null,
     customRingtone: validateRingtone(value.customRingtone),
@@ -119,6 +138,10 @@ function normalizeImportedData(value) {
     settings: {
       autoStartEnabled: settings.autoStartEnabled === true,
       keepAliveEnabled: settings.keepAliveEnabled === true,
+      petAlwaysOnTop: settings.petAlwaysOnTop === true,
+      musicOnAlarm: settings.musicOnAlarm === true,
+      musicApp: MUSIC_APPS.has(settings.musicApp) ? settings.musicApp : 'netease',
+      musicAppPath: typeof settings.musicAppPath === 'string' ? settings.musicAppPath : '',
     },
   };
 }
@@ -159,6 +182,7 @@ function clampWindowPosition(x, y, width, height, workArea) {
 
 module.exports = {
   DEFAULT_DATA,
+  MAX_RINGTONE_BYTES,
   clampWindowPosition,
   collectDueAlarms,
   normalizeImportedData,

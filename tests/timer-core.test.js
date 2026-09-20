@@ -43,6 +43,7 @@ test('import restores every exported user field including empty arrays', () => {
     laps: [],
     countdown: { targetDate: '2026-07-16T01:00:00.000Z', label: 'launch' },
     stopwatch: { elapsed: 1200, running: false },
+    focusSessions: [{ duration: 90000, completedAt: 1787068800000 }],
     customRingtone: null,
     customRingtoneName: '',
     settings: { autoStartEnabled: false, keepAliveEnabled: false },
@@ -53,7 +54,51 @@ test('import restores every exported user field including empty arrays', () => {
   assert.deepEqual(imported.laps, []);
   assert.equal(imported.countdown.label, 'launch');
   assert.equal(imported.stopwatch.elapsed, 1200);
+  assert.equal(imported.focusSessions[0].duration, 90000);
   assert.deepEqual(imported.lastFired, { old: true });
+});
+
+test('import preserves per-alarm ringtone, music mode, and music settings', () => {
+  const imported = normalizeImportedData({
+    alarms: [{
+      id: 9,
+      time: '06:30',
+      label: 'wake up',
+      repeat: true,
+      enabled: true,
+      requirePhotoVerification: true,
+      ringtone: 'morning.mp3',
+      musicMode: '起床',
+    }],
+    settings: {
+      autoStartEnabled: true,
+      keepAliveEnabled: true,
+      petAlwaysOnTop: true,
+      musicOnAlarm: true,
+      musicApp: 'custom',
+      musicAppPath: 'C:\\Music\\player.exe',
+    },
+  });
+
+  assert.equal(imported.alarms[0].ringtone, 'morning.mp3');
+  assert.equal(imported.alarms[0].musicMode, '起床');
+  assert.equal(imported.alarms[0].requirePhotoVerification, true);
+  assert.equal(imported.settings.petAlwaysOnTop, true);
+  assert.equal(imported.settings.musicOnAlarm, true);
+  assert.equal(imported.settings.musicApp, 'custom');
+  assert.equal(imported.settings.musicAppPath, 'C:\\Music\\player.exe');
+});
+
+test('import drops unsafe ringtone keys and unsupported music options', () => {
+  const imported = normalizeImportedData({
+    alarms: [{ time: '06:30', ringtone: '../outside.mp3', musicMode: 'unknown' }],
+    settings: { musicApp: 'unknown', musicAppPath: 123 },
+  });
+
+  assert.equal(imported.alarms[0].ringtone, '');
+  assert.equal(imported.alarms[0].musicMode, '');
+  assert.equal(imported.settings.musicApp, 'netease');
+  assert.equal(imported.settings.musicAppPath, '');
 });
 
 test('import rejects malformed alarm data', () => {
@@ -67,11 +112,12 @@ test('import rejects malformed alarm data', () => {
   );
 });
 
-test('import rejects a ringtone larger than 5 MB', () => {
-  const oversized = `data:audio/wav;base64,${'A'.repeat(7 * 1024 * 1024)}`;
+test('import rejects a ringtone larger than 100 MB', () => {
+  // base64 解码后约 100.5 MB（字符数 × 3/4 > 100 MB）
+  const oversized = `data:audio/wav;base64,${'A'.repeat(134 * 1024 * 1024)}`;
   assert.throws(
     () => normalizeImportedData({ customRingtone: oversized }),
-    /5 MB/i,
+    /100 MB/i,
   );
 });
 

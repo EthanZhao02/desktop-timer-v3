@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: file:; media-src 'self' data: file:; connect-src 'none'; object-src 'none'; base-uri 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: file:; media-src 'self' app://ringtone data: file:; connect-src 'self'; object-src 'none'; base-uri 'none'">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>智域计时</title>
   <link rel="stylesheet" href="styles.css">
@@ -22,7 +22,9 @@
   <div class="welcome-overlay" id="welcomeOverlay">
     <div class="welcome-card">
       <div class="welcome-header">
-        <div class="welcome-logo">Z</div>
+        <div class="welcome-logo">
+          <img src="assets/icon.png" alt="智域计时图标">
+        </div>
         <div class="welcome-title">欢迎使用智域计时</div>
         <div class="welcome-subtitle">30 秒快速上手</div>
       </div>
@@ -93,7 +95,10 @@
     </div>
 
     <div class="date-display">
-      <div class="current-date" id="currentDate">2026年7月12日</div>
+      <div class="date-copy">
+        <div class="date-eyebrow">今天</div>
+        <div class="current-date" id="currentDate">2026年7月12日</div>
+      </div>
       <div class="current-time" id="currentTime">00:00:00</div>
     </div>
 
@@ -110,17 +115,16 @@
         <div class="countdown-label" id="countdownLabel">设置倒计时</div>
       </div>
 
-      <div class="preset-buttons">
-        <button class="btn preset-btn" data-preset="kaoyan">考研</button>
-        <button class="btn preset-btn" data-preset="kaogong">考公</button>
-        <button class="btn preset-btn" data-preset="guonian">过年</button>
-        <button class="btn preset-btn" data-preset="shangban">上班</button>
-      </div>
-
       <div class="custom-section">
-        <input type="datetime-local" class="input" id="customDate">
-        <input type="text" class="input" id="customLabel" placeholder="事件名称">
-        <button class="btn btn-primary full-width" id="startCountdownBtn">开始倒计时</button>
+        <div class="section-heading">设置目标</div>
+        <label class="field-label" for="customDate">目标日期与时间</label>
+        <input type="datetime-local" class="input" id="customDate" aria-label="目标日期和时间">
+        <label class="field-label" for="customLabel">事件名称</label>
+        <input type="text" class="input" id="customLabel" placeholder="事件名称，例如：项目交付" aria-label="倒计时事件名称">
+        <div class="countdown-actions">
+          <button class="btn btn-primary" id="startCountdownBtn">开始倒计时</button>
+          <button class="btn is-hidden" id="clearCountdownBtn">清除</button>
+        </div>
       </div>
     </div>
 
@@ -133,9 +137,14 @@
       </div>
 
       <div class="timer-controls">
-        <button class="btn btn-large" id="startTimerBtn">开始</button>
+        <button class="btn btn-large btn-success" id="startTimerBtn">开始</button>
         <button class="btn" id="pauseTimerBtn" disabled>暂停</button>
         <button class="btn" id="resetTimerBtn">重置</button>
+      </div>
+
+      <div class="focus-summary" id="focusSummary">
+        <div><strong id="todayFocusTime">0分钟</strong><span>今日专注</span></div>
+        <div><strong id="todayFocusCount">0次</strong><span>完成次数</span></div>
       </div>
 
       <div>
@@ -150,13 +159,39 @@
     <!-- 闹钟 -->
     <div class="tab-content" id="alarm">
       <div class="alarm-setter">
+        <div class="section-heading">新建闹钟</div>
+        <label class="field-label" for="alarmTime">提醒时间</label>
         <input type="time" class="input time-input" id="alarmTime">
+        <label class="field-label" for="alarmLabel">备注</label>
         <input type="text" class="input" id="alarmLabel" placeholder="闹钟备注">
         <label class="checkbox-label">
           <input type="checkbox" id="repeatDaily">
           每天重复
         </label>
-        <button class="btn btn-primary full-width" id="addAlarmBtn">添加闹钟</button>
+        <label class="checkbox-label alarm-photo-option">
+          <input type="checkbox" id="alarmPhotoVerification">
+          停止闹钟需要拍照验证
+        </label>
+        <div class="field-help">照片仅用于本次验证，不保存、不上传</div>
+        <select class="input" id="alarmRingtone">
+          <option value="">默认铃声</option>
+        </select>
+        <select class="input" id="alarmMusicMode">
+          <option value="">跟随默认场景</option>
+          <option value="熟悉模式">熟悉模式</option>
+          <option value="新鲜模式">新鲜模式</option>
+          <option value="起床">起床</option>
+          <option value="洗澡">洗澡</option>
+          <option value="动感健身">动感健身</option>
+          <option value="深夜EMO">深夜EMO</option>
+          <option value="DJ模式">DJ模式</option>
+          <option value="助眠模式">助眠模式</option>
+        </select>
+        <div class="field-help" id="alarmMusicModeHint">场景模式仅对汽水音乐生效</div>
+        <div class="alarm-form-actions">
+          <button class="btn btn-primary full-width" id="addAlarmBtn">添加闹钟</button>
+          <button class="btn is-hidden" id="cancelAlarmEditBtn">取消编辑</button>
+        </div>
       </div>
 
       <div class="alarm-list" id="alarmList">
@@ -169,63 +204,161 @@
       <div class="settings-modal">
         <div class="settings-modal-header">
           <div class="settings-modal-title">设置</div>
-          <button class="settings-modal-close" id="settingsCloseBtn">✕</button>
+          <button class="settings-modal-close" id="settingsCloseBtn">&#10005;</button>
+        </div>
+
+        <div class="settings-tabs" id="settingsTabs">
+          <button class="settings-tab active" type="button" data-stab="appearance">外观</button>
+          <button class="settings-tab" type="button" data-stab="ringtone">铃声</button>
+          <button class="settings-tab" type="button" data-stab="pet">宠物</button>
+          <button class="settings-tab" type="button" data-stab="music">音乐</button>
+          <button class="settings-tab" type="button" data-stab="data">数据</button>
         </div>
 
         <!-- 外观 -->
-        <div class="settings-group">
-          <div class="settings-group-title">外观</div>
-          <div class="settings-row">
-            <div class="theme-toggle" id="themeToggle">
-              <span>暗色模式</span>
-              <div class="theme-switch" id="themeSwitch"></div>
+        <div class="settings-tabpage active" id="stab-appearance">
+          <div class="settings-group">
+            <div class="settings-group-title">外观</div>
+            <div class="settings-row">
+              <div class="theme-toggle" id="themeToggle">
+                <span>暗色模式</span>
+                <div class="theme-switch" id="themeSwitch"></div>
+              </div>
             </div>
           </div>
         </div>
 
         <!-- 铃声 -->
-        <div class="settings-group">
-          <div class="settings-group-title">铃声</div>
-          <div class="ringtone-options">
-            <label><input type="radio" name="playMode" value="full" checked> 完整播放</label>
-            <label><input type="radio" name="playMode" value="30s"> 30秒</label>
-            <label><input type="radio" name="playMode" value="60s"> 1分钟</label>
-            <label><input type="radio" name="playMode" value="manual"> 手动停止</label>
-          </div>
-          <button class="btn ringtone-btn" id="selectRingtoneBtn">选择自定义铃声</button>
-          <div class="ringtone-name" id="ringtoneName">默认铃声（提示音）</div>
-          <input type="file" class="is-hidden" id="ringtoneFile" accept=".wav,.mp3,audio/wav,audio/mpeg">
-          <div class="audio-control" id="audioControl">
-            <div class="status" id="audioStatus">正在播放...</div>
-            <button class="btn btn-small btn-danger" id="stopAudioBtn">停止</button>
+        <div class="settings-tabpage" id="stab-ringtone">
+          <div class="settings-group">
+            <div class="settings-group-title">铃声</div>
+            <div class="ringtone-options">
+              <label><input type="radio" name="playMode" value="full" checked> 完整播放</label>
+              <label><input type="radio" name="playMode" value="30s"> 30秒</label>
+              <label><input type="radio" name="playMode" value="60s"> 1分钟</label>
+              <label><input type="radio" name="playMode" value="manual"> 手动停止</label>
+            </div>
+            <button class="btn ringtone-btn" id="selectRingtoneBtn">选择自定义铃声</button>
+            <div class="ringtone-name" id="ringtoneName">默认铃声（提示音）</div>
+            <input type="file" class="is-hidden" id="ringtoneFile" accept=".wav,.mp3,audio/wav,audio/mpeg">
+
+            <div class="settings-group-title settings-group-title-spaced">铃声库（每个闹钟可单独选）</div>
+            <div class="ringtone-library-list" id="ringtoneLibraryList">加载中...</div>
+            <button class="btn btn-small" id="addRingtoneBtn">添加铃声到库</button>
+            <div class="audio-control" id="audioControl">
+              <div class="status" id="audioStatus">正在播放...</div>
+              <button class="btn btn-small btn-danger" id="stopAudioBtn">停止</button>
+            </div>
           </div>
         </div>
 
-        <!-- 系统 -->
-        <div class="settings-group">
-          <div class="settings-group-title">系统</div>
-          <div class="settings-row">
-            <label><input type="checkbox" id="autoStartSetting"> 开机自启</label>
-            <label><input type="checkbox" id="keepAliveSetting"> 熄屏保活</label>
+        <!-- 宠物 -->
+        <div class="settings-tabpage" id="stab-pet">
+          <div class="settings-group">
+            <div class="settings-group-title">桌面宠物</div>
+            <div class="settings-row">
+              <label><input type="checkbox" id="petAutoMotionSetting" checked> 宠物自动走动和跑步</label>
+            </div>
+            <div class="settings-row">
+              <label><input type="checkbox" id="petAlwaysOnTopSetting"> 宠物始终置顶</label>
+            </div>
+            <div class="settings-row pet-motion-mode-row">
+              <label for="petMotionModeSetting">自动运动方式</label>
+              <select id="petMotionModeSetting">
+                <option value="mixed">混合：踏步和桌面行走</option>
+                <option value="roam">只在桌面行走</option>
+                <option value="march">只原地踏步</option>
+              </select>
+            </div>
+            <div class="settings-row pet-range-row">
+              <label>走路速度 <em id="walkSpeedVal">1.1</em></label>
+              <input type="range" id="walkSpeed" min="0.5" max="2.2" step="0.1" value="1.1" class="pet-range">
+            </div>
+            <div class="settings-row pet-range-row">
+              <label>步幅 <em id="walkAmpVal">26</em></label>
+              <input type="range" id="walkAmp" min="10" max="34" step="1" value="26" class="pet-range">
+            </div>
+            <div class="settings-row pet-range-row">
+              <label>屈膝 <em id="walkKneeVal">46</em></label>
+              <input type="range" id="walkKnee" min="0" max="70" step="2" value="46" class="pet-range">
+            </div>
+            <button class="btn ringtone-btn walk-preview-btn" id="walkPreviewBtn">原地踏步预览（约5秒）</button>
+            <div class="settings-path">参数自动保存，宠物实时生效</div>
+          </div>
+        </div>
+
+        <!-- 音乐 -->
+        <div class="settings-tabpage" id="stab-music">
+          <div class="settings-group">
+            <div class="settings-group-title">起床听歌</div>
+            <div class="settings-row">
+              <label><input type="checkbox" id="musicOnAlarmSetting"> 铃声播完后自动打开音乐播放</label>
+            </div>
+            <div class="settings-row">
+              <select id="musicAppSelect" disabled>
+                <option value="netease">网易云音乐</option>
+                <option value="kugou">酷狗音乐</option>
+                <option value="qishui">汽水音乐</option>
+                <option value="custom">自定义应用</option>
+              </select>
+              <button class="btn btn-small" id="musicAppPathBtn" disabled>选择应用</button>
+            </div>
+            <div class="settings-path" id="musicAppStatus"></div>
+            <div class="settings-path">场景模式仅对汽水音乐有效；其他应用只负责启动并尝试播放。</div>
+            <button class="btn ringtone-btn" id="testMusicAppBtn">测试启动与播放</button>
           </div>
         </div>
 
         <!-- 数据 -->
-        <div class="settings-group">
-          <div class="settings-group-title">数据管理</div>
-          <div class="settings-row compact">
-            <button class="btn btn-small settings-action-btn" id="exportDataBtn">导出数据</button>
-            <button class="btn btn-small settings-action-btn" id="importDataBtn">导入数据</button>
+        <div class="settings-tabpage" id="stab-data">
+          <div class="settings-group">
+            <div class="settings-group-title">系统</div>
+            <div class="settings-row">
+              <label><input type="checkbox" id="autoStartSetting"> 开机自启</label>
+              <label><input type="checkbox" id="keepAliveSetting"> 熄屏保活</label>
+            </div>
           </div>
-          <div class="settings-path" id="dataPathInfo"></div>
+          <div class="settings-group">
+            <div class="settings-group-title">数据管理</div>
+            <div class="settings-row compact">
+              <button class="btn btn-small settings-action-btn" id="exportDataBtn">导出数据</button>
+              <button class="btn btn-small settings-action-btn" id="importDataBtn">导入数据</button>
+            </div>
+            <div class="settings-path" id="dataPathInfo"></div>
+            <div class="settings-path" id="versionInfo"></div>
+            <button class="btn btn-small full-width diagnostics-btn" id="openDataFolderBtn">打开数据与日志目录</button>
+          </div>
+          <button class="btn btn-danger full-width" id="quitAppBtn">退出应用</button>
         </div>
 
-        <!-- 退出 -->
-        <button class="btn btn-danger full-width" id="quitAppBtn">退出应用</button>
+      </div>
+    </div>
+
+  <div class="alarm-verification-overlay is-hidden" id="alarmVerificationOverlay" role="dialog" aria-modal="true" aria-labelledby="ringingAlarmTitle">
+    <div class="alarm-verification-card">
+      <div class="alarm-verification-kicker">闹钟正在响</div>
+      <div class="alarm-verification-time" id="ringingAlarmTime">--:--</div>
+      <div class="alarm-verification-title" id="ringingAlarmTitle">闹钟</div>
+      <div class="alarm-verification-hint" id="alarmVerificationHint">请完成验证后停止闹钟</div>
+      <div class="camera-panel is-hidden" id="alarmCameraPanel">
+        <video id="alarmCameraVideo" autoplay muted playsinline></video>
+        <canvas id="alarmCameraCanvas" class="is-hidden"></canvas>
+        <div class="camera-status" id="alarmCameraStatus">正在请求摄像头权限...</div>
+      </div>
+      <div class="alarm-fallback is-hidden" id="alarmFallbackPanel">
+        <div class="field-help">摄像头不可用，请输入下面的验证码停止闹钟</div>
+        <div class="alarm-fallback-code" id="alarmFallbackCode">0000</div>
+        <input class="input" id="alarmFallbackInput" inputmode="numeric" maxlength="4" placeholder="输入四位验证码">
+        <button class="btn btn-small" id="retryAlarmCameraBtn" type="button">关闭占用程序后重试摄像头</button>
+      </div>
+      <div class="alarm-verification-actions">
+        <button class="btn btn-primary" id="verifyAlarmStopBtn" disabled>完成眨眼后停止</button>
+        <button class="btn btn-danger is-hidden" id="directAlarmStopBtn">停止闹钟</button>
       </div>
     </div>
   </div>
 
+  <script src="assets/mediapipe/vision_bundle.js"></script>
   <script src="renderer.js"></script>
 </body>
 </html>

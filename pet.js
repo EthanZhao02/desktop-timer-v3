@@ -59,9 +59,210 @@ try {
   };
 
   var currentPose = "idle";
+  var currentPetState = "idle";
   var isAlarmActive = false;
   var poseTimer = null;
   var bubblePoseTimer = null;
+  var motionTimer = null;
+  var poseTransitionTimer = null;
+  var motionPhaseTimer = null;
+  var motionStartedAt = 0;
+  var motionPausedUntil = 0;
+  var turnPending = false;
+  var motionBusy = false;
+  var motionDirection = Math.random() < 0.5 ? -1 : 1;
+  var autoMotionEnabled = localStorage.getItem('petAutoMotion') !== 'false';
+  var petMotionMode = /^(mixed|roam|march)$/.test(localStorage.getItem('petMotionMode') || '')
+    ? localStorage.getItem('petMotionMode')
+    : 'mixed';
+  var stateBeforeOverride = 'idle';
+  var externalActivityState = 'idle';
+  var externalActivityTimer = null;
+
+  // ---- 2D 骨骼走路系统 ----
+  var petBone = document.getElementById("petBone");
+  var boneCanvas = document.getElementById("boneCanvas");
+  var bEl = {
+    fLeg: document.getElementById("fLeg"), fShin: document.getElementById("fShin"),
+    bLeg: document.getElementById("bLeg"), bShin: document.getElementById("bShin"),
+    upper: document.getElementById("bUpper")
+  };
+  var BONE_HF = {x:95,y:286}, BONE_KF = {x:62,y:314}, BONE_HB = {x:112,y:286}, BONE_KB = {x:140,y:314};
+  var boneCfg = {
+    speed: parseFloat(localStorage.getItem('petWalkSpeed') || '1.1'),
+    amp:   parseFloat(localStorage.getItem('petWalkAmp')   || '26'),
+    knee:  parseFloat(localStorage.getItem('petWalkKnee')  || '46')
+  };
+  var boneRAF=null, bonePhi=0, boneLast=0, boneMode=null, boneFacing=1, boneFitScale=0.414, bonePreviewTimer=null;
+
+  var PET_STATES = {
+    idle: { label: '待机', poses: ['idle', 'reading', 'coffee', 'phone', 'peeking'] },
+    walk: { label: '慢走', poses: ['walking'], speed: 3 },
+    run: { label: '跑步', poses: ['walking'], speed: 8 },
+    sleep: { label: '睡觉', poses: ['sleeping'] },
+    work: { label: '工作', poses: ['laptop', 'writing'] },
+    music: { label: '听歌', poses: ['music'] },
+    celebrate: { label: '闹钟庆祝', poses: ['celebrating'] },
+    drag: { label: '拖动中', poses: ['walking'] },
+    chat: { label: '对话', poses: ['thinking'] }
+  };
+
+  function setMotionPhase(phase, duration) {
+    var container = document.getElementById('petContainer');
+    if (!container) return;
+    ['motion-starting', 'motion-moving', 'motion-stopping', 'motion-turning'].forEach(function(name) {
+      container.classList.remove(name);
+    });
+    if (phase) container.classList.add('motion-' + phase);
+    if (motionPhaseTimer) clearTimeout(motionPhaseTimer);
+    motionPhaseTimer = null;
+    if (duration) {
+      motionPhaseTimer = setTimeout(function() {
+        container.classList.remove('motion-' + phase);
+        if (phase === 'starting' && (currentPetState === 'walk' || currentPetState === 'run')) {
+          container.classList.add('motion-moving');
+        }
+        motionPhaseTimer = null;
+      }, duration);
+    }
+  }
+
+  function stopPetMotion(withTransition) {
+    if (motionTimer) clearInterval(motionTimer);
+    motionTimer = null;
+    motionBusy = false;
+    motionPausedUntil = 0;
+    turnPending = false;
+    setMotionPhase(withTransition ? 'stopping' : '', withTransition ? 240 : 0);
+  }
+
+  function startPetMotion(speed) {
+    stopPetMotion(false);
+    if (!autoMotionEnabled || !window.api || !window.api.movePetBy) return;
+    var shouldMarch = petMotionMode === 'march' || (
+      petMotionMode === 'mixed' && currentPetState === 'walk' && Math.random() < 0.5
+    );
+    if (shouldMarch) {
+      setMotionPhase('moving');
+      return;
+    }
+    motionStartedAt = Date.now();
+    setMotionPhase('starting', 420);
+    motionTimer = setInterval(async function() {
+      if (motionBusy || dragging || isAlarmActive || currentPetState === 'chat' || Date.now() < motionPausedUntil) return;
+      motionBusy = true;
+      try {
+        var acceleration = Math.min(1, 0.35 + ((Date.now() - motionStartedAt) / 520) * 0.65);
+        var step = Math.max(1, Math.round(speed * acceleration));
+        var result = await window.api.movePetBy(step * motionDirection, 0);
+        if (!turnPending && result && ((motionDirection < 0 && result.hitLeft) || (motionDirection > 0 && result.hitRight))) {
+          turnPending = true;
+          motionPausedUntil = Date.now() + 300;
+          setMotionPhase('turning', 300);
+          setTimeout(function() {
+            if (currentPetState !== 'walk' && currentPetState !== 'run') return;
+            motionDirection *= -1;
+            updatePetDirection();
+          }, 140);
+          setTimeout(function() {
+            turnPending = false;
+            if (currentPetState === 'walk' || currentPetState === 'run') setMotionPhase('moving');
+          }, 300);
+        }
+      } catch (e) {
+        stopPetMotion();
+      } finally {
+        motionBusy = false;
+      }
+    }, 50);
+  }
+
+  function updatePetDirection() {
+    var container = document.getElementById('petContainer');
+    // 原始人物素材朝左；向右移动时才需要水平镜像。
+    if (container) container.classList.toggle('facing-right', motionDirection > 0);
+    // 骨骼层同步翻转朝向（撞墙转身时也会走到这里），否则会倒着走
+    if (typeof boneSetFacing === 'function') boneSetFacing();
+  }
+
+  // ==================== 2D 骨骼走路（FK 正向运动学） ====================
+  function boneInit() {
+    if (bEl.fLeg)  bEl.fLeg.style.transformOrigin  = BONE_HF.x+'px '+BONE_HF.y+'px';
+    if (bEl.fShin) bEl.fShin.style.transformOrigin = BONE_KF.x+'px '+BONE_KF.y+'px';
+    if (bEl.bLeg)  bEl.bLeg.style.transformOrigin  = BONE_HB.x+'px '+BONE_HB.y+'px';
+    if (bEl.bShin) bEl.bShin.style.transformOrigin = BONE_KB.x+'px '+BONE_KB.y+'px';
+    boneFit();
+    window.addEventListener('resize', boneFit);
+  }
+  function boneFit() {
+    if (!petImage) return;
+    var h = petImage.clientHeight || 158;
+    boneFitScale = h / 382;
+    boneApplyTransform();
+  }
+  function boneApplyTransform() {
+    if (!boneCanvas) return;
+    // 缩放用 transform，水平镜像用独立 scale 属性（负缩放组合在部分环境不生效）
+    boneCanvas.style.transform = 'scale(' + boneFitScale + ',' + boneFitScale + ')';
+    boneCanvas.style.scale = (boneFacing < 0 ? '-1 1' : '1 1');
+  }
+  function boneSetFacing() {
+    boneFacing = motionDirection > 0 ? -1 : 1;  // 素材朝左，向右走才水平镜像
+    boneApplyTransform();
+  }
+  function boneStart(mode) {
+    var container = document.getElementById('petContainer');
+    if (container) container.classList.add('is-bone');
+    boneMode = mode || 'walk';
+    boneSetFacing();
+    boneFit();
+    if (!boneRAF) { boneLast = performance.now(); boneRAF = requestAnimationFrame(boneFrame); }
+  }
+  function boneStop() {
+    var container = document.getElementById('petContainer');
+    if (container) container.classList.remove('is-bone');
+    boneMode = null;
+    if (boneRAF) { cancelAnimationFrame(boneRAF); boneRAF = null; }
+  }
+  function boneFrame(now) {
+    boneRAF = requestAnimationFrame(boneFrame);
+    var dt = Math.min(0.05, (now - boneLast) / 1000); boneLast = now;
+    var A, period, kneeMax, sp = Math.max(0.5, boneCfg.speed);
+    if (boneMode === 'run')       { A = boneCfg.amp*1.25; period = 0.42/sp; kneeMax = boneCfg.knee*1.25; }
+    else if (boneMode === 'march'){ A = boneCfg.amp*0.55; period = 0.72/sp; kneeMax = boneCfg.knee; }
+    else                          { A = boneCfg.amp;      period = 0.72/sp; kneeMax = boneCfg.knee; }
+    if (currentPetState !== 'drag') { bonePhi += dt * Math.PI * 2 / period; }
+    var c = Math.cos(bonePhi), s = Math.sin(bonePhi);
+    var kF = kneeMax * Math.max(0, -s);
+    var kB = kneeMax * Math.max(0,  s);
+    bEl.fLeg.style.transform  = 'rotate(' + (A*c - 50) + 'deg)';
+    bEl.fShin.style.transform = 'rotate(' + (15 - kF) + 'deg)';
+    bEl.bLeg.style.transform  = 'rotate(' + (45 - A*c) + 'deg)';
+    bEl.bShin.style.transform = 'rotate(' + (kB - 20) + 'deg)';
+    var bob = (boneMode === 'idle') ? 0 : Math.round(3 * Math.abs(c));
+    bEl.upper.style.transform = 'translateY(' + bob + 'px)';
+  }
+
+  function setPetState(stateName, options) {
+    var state = PET_STATES[stateName] || PET_STATES.idle;
+    if (isAlarmActive && stateName !== 'celebrate') return;
+    var previousState = currentPetState;
+    currentPetState = PET_STATES[stateName] ? stateName : 'idle';
+    var container = document.getElementById('petContainer');
+    if (container) {
+      Object.keys(PET_STATES).forEach(function(name) { container.classList.remove('state-' + name); });
+      container.classList.add('state-' + currentPetState);
+    }
+    var label = document.getElementById('petStateLabel');
+    if (label) label.textContent = state.label;
+    var poses = state.poses;
+    var pose = options && options.pose ? options.pose : poses[Math.floor(Math.random() * poses.length)];
+    switchPose(pose);
+    updatePetDirection();
+    if (state.speed) startPetMotion(state.speed);
+    else stopPetMotion(previousState === 'walk' || previousState === 'run');
+    console.log('[Pet] State -> ' + currentPetState);
+  }
 
   // 预加载所有图片（确保切换无延迟）
   var preloadedImages = {};
@@ -73,15 +274,66 @@ try {
 
   // 切换姿态（带淡入淡出过渡）
   function switchPose(poseName) {
-    if (isAlarmActive && poseName !== "celebrating") return;
-    if (!POSES[poseName]) return;
-    if (poseName === currentPose && !isAlarmActive) return;
+    if (isAlarmActive && poseName !== "celebrating") return false;
+    if (!POSES[poseName]) return false;
+
+    // ---- 走路 / 跑步 / 拖动：使用 2D 骨骼动画 ----
+    if (poseName === "walking") {
+      var walkMode = (currentPetState === 'run') ? 'run' : 'walk';
+      if (poseName === currentPose && boneRAF) { boneStart(walkMode); return false; }
+      currentPose = "walking";
+      if (poseTransitionTimer) clearTimeout(poseTransitionTimer);
+      poseTransitionTimer = null;
+      petImg.style.opacity = "0";
+      boneStart(walkMode);
+      clearTimeout(bubblePoseTimer);
+      var wbubble = poseBubbles["walking"];
+      if (wbubble && !isAlarmActive) {
+        petBubble.textContent = wbubble;
+        petBubble.className = "pet-bubble show";
+        bubblePoseTimer = setTimeout(function() {
+          if (!isAlarmActive) petBubble.className = "pet-bubble";
+        }, 3500);
+      }
+      console.log("[Pet] Bone walk -> " + walkMode);
+      return true;
+    }
+
+    // ---- 从骨骼姿态切回普通姿态：先准备图片，再隐藏骨骼层，避免闪白 ----
+    if (boneMode) {
+      if (poseTransitionTimer) clearTimeout(poseTransitionTimer);
+      poseTransitionTimer = null;
+      currentPose = poseName;
+      petImg.src = POSES[poseName];
+      petImg.style.opacity = "1";
+      boneStop();
+
+      clearTimeout(bubblePoseTimer);
+      var restoredBubble = poseBubbles[poseName];
+      if (restoredBubble && !isAlarmActive) {
+        petBubble.textContent = restoredBubble;
+        petBubble.className = "pet-bubble show";
+        bubblePoseTimer = setTimeout(function() {
+          if (!isAlarmActive) petBubble.className = "pet-bubble";
+        }, 3500);
+      }
+      console.log("[Pet] Pose -> " + poseName);
+      return true;
+    }
+
+    if (poseName === currentPose && !isAlarmActive) {
+      if (poseTransitionTimer) clearTimeout(poseTransitionTimer);
+      poseTransitionTimer = null;
+      petImg.style.opacity = "1";
+      return false;
+    }
 
     currentPose = poseName;
+    if (poseTransitionTimer) clearTimeout(poseTransitionTimer);
     // 淡出
     petImg.style.opacity = "0";
 
-    setTimeout(function() {
+    poseTransitionTimer = setTimeout(function() {
       petImg.src = POSES[poseName];
       // 淡入
       petImg.style.opacity = "1";
@@ -96,9 +348,11 @@ try {
           if (!isAlarmActive) petBubble.className = "pet-bubble";
         }, 3500);
       }
+      poseTransitionTimer = null;
     }, 280);
 
     console.log("[Pet] Pose -> " + poseName);
+    return true;
   }
 
   // 随机选取一个姿态（排除当前）
@@ -110,7 +364,17 @@ try {
 
   // 自动姿态切换（基于时间 + 随机）
   function autoSwitchPose() {
-    if (isAlarmActive) return;
+    if (externalActivityState === 'work' || externalActivityState === 'music') {
+      if (currentPetState !== externalActivityState && !dragging && currentPetState !== 'chat') {
+        setPetState(externalActivityState);
+      }
+      schedulePoseTimer(5000);
+      return;
+    }
+    if (isAlarmActive || dragging || currentPetState === 'chat') {
+      schedulePoseTimer(3000);
+      return;
+    }
 
     var now = new Date();
     var hour = now.getHours();
@@ -118,46 +382,51 @@ try {
 
     // 深夜 (0:00-6:00): 睡觉
     if (hour >= 0 && hour < 6) {
-      switchPose("sleeping");
+      setPetState("sleep");
       schedulePoseTimer(40000 + Math.random() * 20000);
       return;
     }
 
     // 清晨 (6:00-8:00): 咖啡或走路
     if (hour >= 6 && hour < 8) {
-      var morningPoses = ["coffee", "walking", "idle", "phone"];
-      switchPose(randomPick(morningPoses));
-      schedulePoseTimer(25000 + Math.random() * 15000);
+      var morningR = Math.random();
+      setPetState(morningR < 0.55 ? "walk" : (morningR < 0.65 ? "run" : "idle"));
+      schedulePoseTimer(14000 + Math.random() * 9000);
       return;
     }
 
     // 工作时间 (8:00-18:00 工作日): 混合工作和休闲
     if (hour >= 8 && hour < 18 && day >= 1 && day <= 5) {
       var r = Math.random();
-      if (r < 0.35) {
-        // 35% 工作姿态
-        switchPose(randomPick(workPoses));
+      if (r < 0.30) {
+        // 30% 工作姿态
+        setPetState("work");
       } else if (r < 0.45) {
-        // 10% 特殊姿态（彩蛋）
-        switchPose(randomPick(specialPoses));
+        // 15% 慢走
+        setPetState("walk");
+      } else if (r < 0.53) {
+        // 8% 跑步
+        setPetState("run");
       } else {
-        // 55% 休闲待机
-        switchPose(randomPick(idlePoses));
+        // 47% 休闲待机
+        setPetState("idle");
       }
-      schedulePoseTimer(20000 + Math.random() * 20000);
+      schedulePoseTimer(14000 + Math.random() * 10000);
       return;
     }
 
     // 晚间/周末: 以休闲为主，偶尔特殊
     var eveningR = Math.random();
-    if (eveningR < 0.12) {
-      switchPose(randomPick(specialPoses));
-    } else if (eveningR < 0.25) {
-      switchPose("music");
+    if (eveningR < 0.18) {
+      setPetState("walk");
+    } else if (eveningR < 0.26) {
+      setPetState("run");
+    } else if (eveningR < 0.41) {
+      setPetState("music");
     } else {
-      switchPose(randomPick(idlePoses));
+      setPetState("idle");
     }
-    schedulePoseTimer(22000 + Math.random() * 18000);
+    schedulePoseTimer(14000 + Math.random() * 10000);
   }
 
   function schedulePoseTimer(ms) {
@@ -168,6 +437,7 @@ try {
   // ==================== 实时状态检测 ====================
   var windowStateActive = false; // 标记是否正在使用实时检测
   var windowStateTimer = null;
+  var lastActivityKey = '';
 
   // 进程名 → 姿态映射
   var processPoseMap = {
@@ -214,29 +484,36 @@ try {
   };
 
   function handleWindowState(state) {
-    if (isAlarmActive) return;
-
-    windowStateActive = true;
-    clearTimeout(poseTimer);
+    if (isAlarmActive || externalActivityState === 'work' || externalActivityState === 'music') return;
 
     var proc = (state.process || '').toLowerCase().replace(/\.exe$/i, '');
     var idleMs = state.idleMs || 0;
     var locked = state.locked || false;
+    var idleBand = locked ? 'locked' : (idleMs > 300000 ? 'sleep' : (idleMs > 120000 ? 'thinking' : 'active'));
+    var activityKey = idleBand + ':' + (idleBand === 'active' ? proc : '');
+    if (activityKey === lastActivityKey) return;
+    lastActivityKey = activityKey;
+
+    windowStateActive = true;
+    clearTimeout(poseTimer);
 
     // 锁屏 → 睡觉
     if (locked || proc === 'lockscreen' || proc === 'lockapp') {
+      setPetState('sleep');
       switchPoseWithBubble("sleeping", "Zzz... (锁屏中)");
       return;
     }
 
     // 空闲超过5分钟 → 睡觉
     if (idleMs > 300000) {
+      setPetState('sleep');
       switchPoseWithBubble("sleeping", "Zzz... (发呆中)");
       return;
     }
 
     // 空闲超过2分钟 → 思考
     if (idleMs > 120000) {
+      setPetState('idle', { pose: 'thinking' });
       switchPoseWithBubble("thinking", "发呆中...");
       return;
     }
@@ -252,26 +529,25 @@ try {
     }
 
     if (matched) {
+      if (matched.pose === 'music') setPetState('music');
+      else if (matched.pose === 'laptop' || matched.pose === 'writing') setPetState('work', { pose: matched.pose });
+      else setPetState('idle', { pose: matched.pose });
       switchPoseWithBubble(matched.pose, matched.bubble);
     } else {
-      // 未知程序：随机休闲（不频繁切换）
-      if (currentPose !== "idle" && currentPose !== "reading" && currentPose !== "coffee") {
-        switchPose(randomPick(idlePoses));
-      }
+      // 未知程序不覆盖当前动作，让自动状态机继续决定待机、走路或跑步。
     }
 
-    // 设置超时：如果15秒没有新状态，恢复自动切换
+    // 前台程序提示短暂展示后恢复自动行为；普通轮询不会重复延长这个计时。
     clearTimeout(windowStateTimer);
     windowStateTimer = setTimeout(function() {
       windowStateActive = false;
       autoSwitchPose();
-    }, 15000);
+    }, matched ? 8000 : 2500);
   }
 
   // 带气泡的姿态切换
   function switchPoseWithBubble(poseName, bubble) {
-    if (poseName === currentPose) return;
-    switchPose(poseName);
+    if (poseName !== currentPose) switchPose(poseName);
     if (bubble && !isAlarmActive) {
       clearTimeout(bubblePoseTimer);
       setTimeout(function() {
@@ -293,9 +569,54 @@ try {
   var winStartX = 0, winStartY = 0;
   var hasDragged = false;
 
+  // 透明区域允许鼠标穿透；进入宠物本体或控件时恢复交互。
+  var petMouseEventsEnabled = null;
+  var hitTestCanvas = document.createElement('canvas');
+  var hitTestContext = hitTestCanvas.getContext('2d', { willReadFrequently: true });
+  var hitTestImageSrc = '';
+
+  function isOpaquePetPixel(x, y) {
+    var rect = petImg.getBoundingClientRect();
+    if (x < rect.left || x >= rect.right || y < rect.top || y >= rect.bottom) return false;
+    if (!petImg.complete || !petImg.naturalWidth || !petImg.naturalHeight || !hitTestContext) return true;
+    if (hitTestImageSrc !== petImg.currentSrc) {
+      hitTestCanvas.width = petImg.naturalWidth;
+      hitTestCanvas.height = petImg.naturalHeight;
+      hitTestContext.clearRect(0, 0, hitTestCanvas.width, hitTestCanvas.height);
+      hitTestContext.drawImage(petImg, 0, 0);
+      hitTestImageSrc = petImg.currentSrc;
+    }
+    var imageX = Math.min(hitTestCanvas.width - 1, Math.max(0, Math.floor((x - rect.left) * hitTestCanvas.width / rect.width)));
+    var imageY = Math.min(hitTestCanvas.height - 1, Math.max(0, Math.floor((y - rect.top) * hitTestCanvas.height / rect.height)));
+    return hitTestContext.getImageData(imageX, imageY, 1, 1).data[3] > 20;
+  }
+
+  function updatePetHitTesting(e) {
+    if (!window.api || !window.api.setPetMouseEvents) return;
+    var target = document.elementFromPoint(e.clientX, e.clientY);
+    var controlHit = Boolean(target && target.closest('#petClose, #petChatPanel, #petSettingsPanel'));
+    var interactive = controlHit || isOpaquePetPixel(e.clientX, e.clientY);
+    var petContainer = document.getElementById('petContainer');
+    if (petContainer) petContainer.classList.toggle('controls-visible', interactive);
+    if (interactive === petMouseEventsEnabled) return;
+    petMouseEventsEnabled = interactive;
+    window.api.setPetMouseEvents(interactive);
+  }
+  document.addEventListener('mousemove', updatePetHitTesting);
+  document.addEventListener('mouseleave', function() {
+    var petContainer = document.getElementById('petContainer');
+    if (petContainer) petContainer.classList.remove('controls-visible');
+    if (petMouseEventsEnabled !== false && window.api && window.api.setPetMouseEvents) {
+      petMouseEventsEnabled = false;
+      window.api.setPetMouseEvents(false);
+    }
+  });
+
   petImage.addEventListener('pointerdown', function(e) {
     if (e.button !== 0) return;
     dragging = true;
+    stateBeforeOverride = currentPetState;
+    setPetState('drag');
     hasDragged = false;
     dragStartX = e.clientX;
     dragStartY = e.clientY;
@@ -315,35 +636,47 @@ try {
     if (!dragging) return;
     var dx = e.clientX - dragStartX;
     var dy = e.clientY - dragStartY;
+    if (!hasDragged && (Math.abs(dx) > 3 || Math.abs(dy) > 3)) {
+      hasDragged = true;
+    }
     if (hasDragged) {
       var newX = winStartX + dx;
       var newY = winStartY + dy;
       if (window.api && window.api.setWindowPos) {
         window.api.setWindowPos(newX, newY);
       }
-    } else if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
-      hasDragged = true;
     }
   });
 
   petImage.addEventListener('pointerup', function(e) {
     if (!dragging) return;
     dragging = false;
+    if (petImage.hasPointerCapture(e.pointerId)) {
+      petImage.releasePointerCapture(e.pointerId);
+    }
     petImage.style.cursor = 'grab';
     document.body.style.cursor = '';
     if (!hasDragged) {
+      setPetState(stateBeforeOverride === 'drag' ? 'idle' : stateBeforeOverride);
       handlePetClick();
     } else {
       // 拖动结束，恢复动画
       petImage.style.animationPlayState = '';
+      setPetState('idle');
+      schedulePoseTimer(5000);
     }
   });
 
-  petImage.addEventListener('pointercancel', function() {
+  petImage.addEventListener('pointercancel', function(e) {
     dragging = false;
+    if (petImage.hasPointerCapture(e.pointerId)) {
+      petImage.releasePointerCapture(e.pointerId);
+    }
     petImage.style.cursor = 'grab';
     document.body.style.cursor = '';
     petImage.style.animationPlayState = '';
+    setPetState('idle');
+    schedulePoseTimer(5000);
   });
 
   // ==================== 时间显示 ====================
@@ -406,6 +739,7 @@ try {
   var bubbleTimer = null;
   petImage.onmouseenter = function() {
     clearTimeout(bubbleTimer);
+    if (petBubble) petBubble.className = "pet-bubble";
     miniInfo.className = "mini-info show";
   };
   petImage.onmouseleave = function() {
@@ -465,10 +799,18 @@ try {
   var apiNotice = document.getElementById('apiNotice');
 
   function syncPanelVisibility() {
-    if (!window.api || !window.api.setPanelVisible) return;
     var chatVisible = chatPanel && chatPanel.classList.contains('show');
     var settingsVisible = settingsPanel && settingsPanel.classList.contains('show');
-    window.api.setPanelVisible(Boolean(chatVisible || settingsVisible));
+    if (chatVisible || settingsVisible) {
+      if (currentPetState !== 'chat') stateBeforeOverride = currentPetState;
+      setPetState('chat');
+    } else if (currentPetState === 'chat') {
+      setPetState(stateBeforeOverride === 'chat' ? 'idle' : stateBeforeOverride);
+      schedulePoseTimer(5000);
+    }
+    if (window.api && window.api.setPanelVisible) {
+      window.api.setPanelVisible(Boolean(chatVisible || settingsVisible));
+    }
   }
 
 
@@ -494,6 +836,8 @@ try {
       var volcanoInput = document.getElementById('volcanoKeyInput');
       var deepseekStatus = document.getElementById('deepseekStatus');
       var volcanoStatus = document.getElementById('volcanoStatus');
+      var motionToggle = document.getElementById('petAutoMotion');
+      if (motionToggle) motionToggle.checked = autoMotionEnabled;
 
       var hasDeepseek = modelConfigs.deepseek && modelConfigs.deepseek.apiKey;
       var hasVolcano = modelConfigs.volcano && modelConfigs.volcano.apiKey;
@@ -520,6 +864,9 @@ try {
   async function saveApiKeys() {
     var deepseekKey = document.getElementById('deepseekKeyInput').value.trim();
     var volcanoKey = document.getElementById('volcanoKeyInput').value.trim();
+    var motionToggle = document.getElementById('petAutoMotion');
+    autoMotionEnabled = motionToggle ? motionToggle.checked : autoMotionEnabled;
+    localStorage.setItem('petAutoMotion', autoMotionEnabled ? 'true' : 'false');
 
     // 更新本地配置
     if (deepseekKey) modelConfigs.deepseek = { apiKey: deepseekKey };
@@ -553,6 +900,9 @@ try {
     }
 
     toggleSettingsPanel(false);
+    if (!autoMotionEnabled && (currentPetState === 'walk' || currentPetState === 'run')) {
+      setPetState('idle');
+    }
     // 检查当前模型是否需要 API Key
     checkApiKeyNotice();
   }
@@ -608,6 +958,73 @@ try {
       saveBtn.addEventListener('click', function(e) {
         e.stopPropagation();
         saveApiKeys();
+      });
+    }
+
+    // 自动运动开关立即生效，不依赖保存 API Key。
+    var motionToggle = document.getElementById('petAutoMotion');
+    if (motionToggle) {
+      motionToggle.checked = autoMotionEnabled;
+      motionToggle.addEventListener('change', function(e) {
+        e.stopPropagation();
+        autoMotionEnabled = motionToggle.checked;
+        localStorage.setItem('petAutoMotion', autoMotionEnabled ? 'true' : 'false');
+        if (!autoMotionEnabled && (currentPetState === 'walk' || currentPetState === 'run')) {
+          setPetState('idle');
+        } else if (autoMotionEnabled) {
+          schedulePoseTimer(1000);
+        }
+      });
+    }
+
+    // 设置选项卡切换
+    var settingTabs = document.querySelectorAll('.settings-tab');
+    var settingTabPages = document.querySelectorAll('.settings-tabpage');
+    settingTabs.forEach(function(tabBtn) {
+      tabBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        settingTabs.forEach(function(b){ b.classList.remove('active'); });
+        settingTabPages.forEach(function(p){ p.classList.remove('active'); });
+        tabBtn.classList.add('active');
+        var page = document.getElementById('tabpage-' + tabBtn.dataset.tab);
+        if (page) page.classList.add('active');
+      });
+    });
+
+    // 走路骨骼动作调试
+    function bindTune(inputId, cfgKey, storageKey) {
+      var input = document.getElementById(inputId);
+      if (!input) return;
+      input.value = boneCfg[cfgKey];
+      var valEl = document.getElementById(inputId + 'Val');
+      if (valEl) valEl.textContent = '' + input.value;
+      input.addEventListener('click', function(e){ e.stopPropagation(); });
+      input.addEventListener('mousedown', function(e){ e.stopPropagation(); });
+      input.addEventListener('input', function(e) {
+        e.stopPropagation();
+        boneCfg[cfgKey] = parseFloat(input.value);
+        localStorage.setItem(storageKey, input.value);
+        if (valEl) valEl.textContent = '' + input.value;
+      });
+    }
+    bindTune('walkSpeed', 'speed', 'petWalkSpeed');
+    bindTune('walkAmp',   'amp',   'petWalkAmp');
+    bindTune('walkKnee',  'knee',  'petWalkKnee');
+    var walkPreviewBtn = document.getElementById('walkPreviewBtn');
+    if (walkPreviewBtn) {
+      walkPreviewBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        toggleSettingsPanel(false);
+        if (motionTimer) { clearInterval(motionTimer); motionTimer = null; }
+        clearTimeout(poseTimer);
+        clearTimeout(bonePreviewTimer);
+        boneStart('march');
+        showMessage('原地踏步预览，5秒后恢复');
+        bonePreviewTimer = setTimeout(function() {
+          boneStop();
+          setPetState('idle');
+          schedulePoseTimer(3000);
+        }, 5000);
       });
     }
 
@@ -939,9 +1356,38 @@ try {
 
   // ==================== 初始化 ====================
   function init() {
-    // 设置初始图片
-    petImg.src = POSES.idle;
     petImg.style.transition = "opacity 0.28s ease";
+    boneInit();
+    setPetState('idle');
+
+    // 主程序设置改动走路参数时实时同步
+    window.addEventListener('storage', function(e) {
+      if (!e.newValue) return;
+      if (e.key === 'petWalkSpeed') boneCfg.speed = Math.max(0.5, parseFloat(e.newValue) || 1.1);
+      else if (e.key === 'petWalkAmp') boneCfg.amp = parseFloat(e.newValue) || 26;
+      else if (e.key === 'petWalkKnee') boneCfg.knee = parseFloat(e.newValue) || 46;
+      else if (e.key === 'petAutoMotion') {
+        autoMotionEnabled = (e.newValue === 'true');
+        if (!autoMotionEnabled && (currentPetState === 'walk' || currentPetState === 'run')) setPetState('idle');
+        else if (autoMotionEnabled) schedulePoseTimer(500);
+      }
+      else if (e.key === 'petMotionMode' && /^(mixed|roam|march)$/.test(e.newValue)) {
+        petMotionMode = e.newValue;
+        if (currentPetState === 'walk' || currentPetState === 'run') {
+          startPetMotion(PET_STATES[currentPetState].speed);
+        }
+      }
+      else if (e.key === 'petWalkPreview') {
+        try {
+          var c = document.getElementById('petContainer');
+          if (c) c.classList.add('is-bone');
+          boneStart('march');
+          setTimeout(function(){
+            if (currentPetState !== 'walk' && currentPetState !== 'run') boneStop();
+          }, 5200);
+        } catch(err) {}
+      }
+    });
 
     updateTime();
     setInterval(updateTime, 1000);
@@ -955,6 +1401,12 @@ try {
     if (window.api && window.api.onAlarmTriggered) {
       window.api.onAlarmTriggered(function(alarm) {
         triggerAlarmReaction(alarm);
+      });
+    }
+
+    if (window.api && window.api.onPetActivity) {
+      window.api.onPetActivity(function(activity) {
+        applyExternalActivity(activity);
       });
     }
 
@@ -975,7 +1427,7 @@ try {
           // 锁屏：切到睡觉 + 气泡
           clearTimeout(poseTimer);
           isAlarmActive = false; // 解锁闹钟锁定
-          switchPose('sleeping');
+          setPetState('sleep');
           petBubble.textContent = '主人晚安~ Zzz';
           petBubble.className = 'pet-bubble show';
           clearTimeout(bubblePoseTimer);
@@ -985,7 +1437,12 @@ try {
         } else if (data.type === 'unlocked') {
           // 解锁：切到 idle + 欢迎气泡
           isAlarmActive = false;
-          autoSwitchPose();
+          if (externalActivityState === 'work' || externalActivityState === 'music') {
+            setPetState(externalActivityState);
+          } else {
+            setPetState('idle');
+            autoSwitchPose();
+          }
           var sleepMs = data.time ? (Date.now() - data.time) : 0;
           var sleepMin = Math.round(sleepMs / 60000);
           var msg = '主人回来啦~';
@@ -1025,10 +1482,10 @@ try {
     // 加载保存的 API Key
     loadSavedApiKeys();
 
-    // 启动自动姿态切换（5秒后开始，给预加载时间）
+    // 启动自动姿态切换（3秒后开始，给预加载时间）
     setTimeout(function() {
       autoSwitchPose();
-    }, 5000);
+    }, 3000);
 
     // 欢迎气泡
     setTimeout(function() {
@@ -1042,6 +1499,37 @@ try {
     console.log("桌面宠物启动成功 ✓ (多姿态模式，12个表情自动切换)");
   }
 
+  function applyExternalActivity(activity) {
+    if (!activity || !PET_STATES[activity.state]) return;
+    if (externalActivityTimer) clearTimeout(externalActivityTimer);
+    externalActivityTimer = null;
+
+    if (activity.state === 'celebrate') {
+      var restoreState = activity.restoreState === 'work' || activity.restoreState === 'music'
+        ? activity.restoreState
+        : 'idle';
+      externalActivityState = restoreState;
+      clearTimeout(poseTimer);
+      setPetState('celebrate');
+      petBubble.textContent = activity.source === 'countdown-complete' ? '倒计时完成啦！' : '完成啦！';
+      petBubble.className = 'pet-bubble show';
+      externalActivityTimer = setTimeout(function() {
+        setPetState(externalActivityState);
+        if (externalActivityState === 'idle') schedulePoseTimer(5000);
+        petBubble.className = 'pet-bubble';
+      }, activity.duration || 8000);
+      return;
+    }
+
+    externalActivityState = activity.state === 'work' || activity.state === 'music'
+      ? activity.state
+      : 'idle';
+    if (dragging || currentPetState === 'chat' || isAlarmActive) return;
+    clearTimeout(poseTimer);
+    setPetState(externalActivityState);
+    if (externalActivityState === 'idle') schedulePoseTimer(5000);
+  }
+
   // ==================== 闹钟反应动画 ====================
   function triggerAlarmReaction(alarm) {
     var label = (alarm && alarm.label) ? alarm.label : "闹钟";
@@ -1050,7 +1538,7 @@ try {
     // 锁定姿态，切换到庆祝
     isAlarmActive = true;
     clearTimeout(poseTimer);
-    switchPose("celebrating");
+    setPetState("celebrate");
 
     document.body.className = "alarm-flash";
     setTimeout(function() { document.body.className = ""; }, 2500);
@@ -1064,6 +1552,8 @@ try {
     setTimeout(function() {
       petImage.classList.remove("alarm-shake");
       isAlarmActive = false;
+      setPetState(externalActivityState);
+      if (externalActivityState === 'idle') schedulePoseTimer(5000);
       console.log("[Pet] Alarm ended, resuming auto pose");
     }, 10000);
     setTimeout(function() {

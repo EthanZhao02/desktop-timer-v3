@@ -13,10 +13,25 @@
 
     <div class="pet-image" id="petImage" title="点击展开计时器">
       <img id="petImg" src="assets/pet-idle.png" alt="桌面宠物" />
+      <!-- 2D 骨骼走路层（头身完整，大腿/小腿绕关节旋转） -->
+      <div class="pet-bone" id="petBone">
+        <div class="bone-canvas" id="boneCanvas">
+          <div class="b-leg b-back" id="bLeg">
+            <img src="assets/bone-back-thigh.png" alt="">
+            <div class="b-shin" id="bShin"><img src="assets/bone-back-shin.png" alt=""></div>
+          </div>
+          <img class="b-upper" id="bUpper" src="assets/bone-upper.png" alt="">
+          <div class="b-leg b-front" id="fLeg">
+            <img src="assets/bone-front-thigh.png" alt="">
+            <div class="b-shin" id="fShin"><img src="assets/bone-front-shin.png" alt=""></div>
+          </div>
+        </div>
+      </div>
       <div class="pet-status" id="petStatus"></div>
     </div>
 
     <div class="pet-time" id="petTime">00:00:00</div>
+    <div class="pet-state-label" id="petStateLabel" aria-hidden="true">待机</div>
 
     <div class="pet-bubble" id="petBubble">点击我打开计时器</div>
 
@@ -39,7 +54,7 @@
         <div class="pet-chat-header-right">
           <button class="pet-chat-iconbtn" id="petOpenSettings" title="API设置">设置</button>
           <button class="pet-chat-iconbtn" id="petOpenTimer" title="打开计时器">计时器</button>
-          <button class="pet-chat-iconbtn" id="petChatClear" title="清空记录" style="display:none">清空</button>
+          <button class="pet-chat-iconbtn initially-hidden" id="petChatClear" title="清空记录">清空</button>
           <button class="pet-chat-close" id="petChatClose" title="关闭">×</button>
         </div>
       </div>
@@ -53,7 +68,7 @@
             支持编程、写作、闲聊
           </div>
         </div>
-        <div class="pet-chat-api-notice" id="apiNotice" style="display:none">
+        <div class="pet-chat-api-notice initially-hidden" id="apiNotice">
           <span class="api-notice-text"></span>
           <button class="api-notice-btn" id="apiSettingsBtn">去设置</button>
         </div>
@@ -61,7 +76,7 @@
 
       <!-- 输入区域 -->
       <div class="pet-chat-input-area">
-        <div class="pet-chat-status" id="chatStatus" style="display:none"></div>
+        <div class="pet-chat-status initially-hidden" id="chatStatus"></div>
         <div class="pet-chat-input-row">
           <input class="pet-chat-input" id="petChatInput" type="text" placeholder="和星野说点什么..." maxlength="500" autocomplete="off" />
           <button class="pet-chat-send" id="petChatSend">
@@ -78,38 +93,41 @@
     </div>
   </div>
 
-  <!-- API 设置面板 -->
+  <!-- 设置面板（选项卡） -->
   <div class="pet-settings-panel" id="petSettingsPanel">
     <div class="pet-settings-header">
-      <span class="pet-settings-title">API 设置</span>
-      <button class="pet-settings-close" id="settingsClose">×</button>
-    </div>
-    <div class="pet-settings-content">
-      <div class="settings-section">
-        <div class="settings-item">
-          <label class="settings-label">DeepSeek API Key</label>
-          <div class="settings-input-row">
-            <input type="password" class="settings-input" id="deepseekKeyInput" placeholder="sk-..." />
-            <button class="settings-toggle-btn" id="toggleDeepseek">显示</button>
+      <span class="pet-settings-title">AI 设置</span>
+      <button class="pet-settings-close" id="settingsClose">&times;</button>
+    </div>    <div class="pet-settings-content">
+<!-- 选项卡：AI 服务 -->
+      <div id="tabpage-ai">
+        <div class="settings-section">
+          <div class="settings-item">
+            <label class="settings-label">DeepSeek API Key</label>
+            <div class="settings-input-row">
+              <input type="password" class="settings-input" id="deepseekKeyInput" placeholder="sk-..." />
+              <button class="settings-toggle-btn" id="toggleDeepseek">显示</button>
+            </div>
+            <div class="settings-status" id="deepseekStatus">未配置</div>
           </div>
-          <div class="settings-status" id="deepseekStatus">未配置</div>
+          <div class="settings-item">
+            <label class="settings-label">火山引擎 API Key</label>
+            <div class="settings-input-row">
+              <input type="password" class="settings-input" id="volcanoKeyInput" placeholder="..." />
+              <button class="settings-toggle-btn" id="toggleVolcano">显示</button>
+            </div>
+            <div class="settings-status" id="volcanoStatus">未配置</div>
+          </div>
         </div>
-        <div class="settings-item">
-          <label class="settings-label">火山引擎 API Key</label>
-          <div class="settings-input-row">
-            <input type="password" class="settings-input" id="volcanoKeyInput" placeholder="..." />
-            <button class="settings-toggle-btn" id="toggleVolcano">显示</button>
-          </div>
-          <div class="settings-status" id="volcanoStatus">未配置</div>
+        <div class="settings-tips">
+          <p>💡 如何获取 API Key：</p>
+          <ul>
+            <li>DeepSeek: https://platform.deepseek.com</li>
+            <li>火山引擎: https://console.volcengine.com</li>
+          </ul>
         </div>
       </div>
-      <div class="settings-tips">
-        <p>💡 如何获取 API Key：</p>
-        <ul>
-          <li>DeepSeek: https://platform.deepseek.com</li>
-          <li>火山引擎: https://console.volcengine.com</li>
-        </ul>
-      </div>
+
       <div class="settings-actions">
         <button class="settings-btn settings-btn-secondary" id="settingsCancel">取消</button>
         <button class="settings-btn settings-btn-primary" id="settingsSave">保存</button>

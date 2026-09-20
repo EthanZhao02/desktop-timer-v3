@@ -33,6 +33,10 @@ body {
   font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
 }
 
+.initially-hidden {
+  display: none;
+}
+
 body.alarm-flash {
   animation: bodyFlash 1.2s ease-out;
 }
@@ -64,7 +68,7 @@ body.alarm-flash {
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
-  padding: 62px 0 16px;
+  padding: 88px 0 16px;
   pointer-events: none;
 }
 
@@ -102,6 +106,181 @@ body.alarm-flash {
   filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.25));
   animation: petIdle 6s ease-in-out infinite;
   transition: opacity 0.28s ease;
+}
+
+.pet-state-label {
+  display: none;
+}
+
+.pet-container.state-walk .pet-image img {
+  transform-origin: 50% 92%;
+  animation: petWalkNatural 0.62s ease-in-out infinite;
+}
+.pet-container.state-run .pet-image img {
+  transform-origin: 50% 92%;
+  animation: petRunNatural 0.38s ease-in-out infinite;
+}
+.pet-container.state-sleep .pet-image img {
+  transform-origin: 50% 88%;
+  animation: petSleep 3.4s ease-in-out infinite;
+}
+.pet-container.state-work .pet-image img {
+  transform-origin: 50% 85%;
+  animation: petWork 1.25s ease-in-out infinite;
+}
+.pet-container.state-music .pet-image img {
+  transform-origin: 50% 88%;
+  animation: petMusic 0.68s ease-in-out infinite;
+}
+.pet-container.state-celebrate .pet-image img {
+  transform-origin: 50% 92%;
+  animation: petCelebrate 0.72s cubic-bezier(0.35, 0, 0.25, 1) infinite;
+}
+.pet-container.state-drag .pet-image img {
+  animation-play-state: paused;
+}
+.pet-container.state-drag .pet-image {
+  transform: translateY(-4px) rotate(4deg) scale(1.02);
+}
+.pet-container.state-chat .pet-image img {
+  transform-origin: 50% 88%;
+  animation: petChat 1.8s ease-in-out infinite;
+}
+.pet-container.facing-right #petImg {
+  scale: -1 1;
+}
+
+/* ===== 2D 骨骼走路层 ===== */
+.pet-bone {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: flex-end;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 1;
+}
+.pet-container.is-bone #petImg { opacity: 0 !important; visibility: hidden; }
+.pet-container.is-bone .pet-bone { display: flex; }
+.bone-canvas {
+  position: relative;
+  width: 211px;
+  height: 382px;
+  flex: 0 0 211px;
+  transform-origin: bottom center;
+  filter: drop-shadow(0 4px 10px rgba(0,0,0,0.25));
+}
+.bone-canvas img,
+.b-leg, .b-shin {
+  position: absolute; left: 0; top: 0;
+  width: 211px; height: 382px;
+  animation: none !important;
+  scale: 1 1;
+}
+.bone-canvas img { object-fit: fill; }
+.b-leg, .b-shin { background: transparent; }
+.b-back  { z-index: 1; }
+.b-upper { z-index: 2; }
+.b-front { z-index: 3; }
+
+/* 走路动作调试滑块 */
+.tune-row {
+  display: flex; align-items: center; gap: 8px;
+  margin: 9px 0; font-size: 12px; color: #d8d8ee;
+}
+.tune-row > span { width: 34px; flex: 0 0 34px; }
+.tune-row input[type="range"] { flex: 1; accent-color: #8a7bff; cursor: pointer; }
+.tune-row em { width: 32px; text-align: right; font-style: normal; color: #b8b8d8; font-size: 11px; }
+
+/* 设置选项卡 */
+.settings-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 0 16px;
+  background: rgba(255,255,255,0.03);
+  border-bottom: 1px solid rgba(108,92,231,0.18);
+  flex-shrink: 0;
+}
+.settings-tab {
+  flex: 1;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #9a9ab8;
+  font-size: 14px;
+  font-family: inherit;
+  padding: 12px 0;
+  cursor: pointer;
+  transition: color .15s ease, border-color .15s ease;
+}
+.settings-tab:hover { color: #d8d8f0; }
+.settings-tab.active {
+  color: #a99cff;
+  border-bottom-color: #6c5ce7;
+  font-weight: 600;
+}
+.settings-tabpage { display: none; flex-direction: column; gap: 20px; }
+.settings-tabpage.active { display: flex; }
+
+.pet-container.motion-starting .pet-image {
+  animation: petMotionStart 0.42s ease-out both;
+}
+.pet-container.motion-stopping .pet-image {
+  animation: petMotionStop 0.24s ease-out both;
+}
+.pet-container.motion-turning .pet-image {
+  animation: petMotionTurn 0.3s ease-in-out both;
+}
+
+@keyframes petSleep {
+  0%, 100% { transform: translateY(1px) scaleX(1) scaleY(0.99); opacity: 0.94; }
+  50% { transform: translateY(3px) scaleX(1.012) scaleY(1.008); opacity: 1; }
+}
+@keyframes petWalkNatural {
+  0%, 100% { transform: translateY(0) rotate(-0.8deg); }
+  50% { transform: translateY(-3px) rotate(0.8deg); }
+}
+@keyframes petRunNatural {
+  0%, 100% { transform: translateY(1px) rotate(-2deg) scaleY(0.99); }
+  50% { transform: translateY(-6px) rotate(1deg) scaleY(1.01); }
+}
+@keyframes petWork {
+  0%, 100% { transform: translateY(0) rotate(0); }
+  28% { transform: translateY(-1px) rotate(-0.7deg); }
+  55% { transform: translateY(0) rotate(0.6deg); }
+  76% { transform: translateY(-2px) rotate(-0.4deg); }
+}
+@keyframes petMusic {
+  0%, 100% { transform: translateY(0) rotate(-2.5deg) scaleY(1); }
+  45% { transform: translateY(-5px) rotate(3deg) scaleY(1.015); }
+  70% { transform: translateY(-2px) rotate(1deg) scaleY(0.99); }
+}
+@keyframes petCelebrate {
+  0%, 100% { transform: translateY(0) rotate(-3deg) scaleX(1.04) scaleY(0.96); }
+  18% { transform: translateY(-5px) rotate(-5deg) scale(1); }
+  48% { transform: translateY(-15px) rotate(5deg) scale(1.055); }
+  72% { transform: translateY(-3px) rotate(2deg) scaleX(0.98) scaleY(1.03); }
+  86% { transform: translateY(1px) rotate(-1deg) scaleX(1.045) scaleY(0.955); }
+}
+@keyframes petChat {
+  0%, 100% { transform: translateY(0) rotate(0); }
+  35% { transform: translateY(-2px) rotate(-0.8deg); }
+  65% { transform: translateY(-1px) rotate(0.8deg); }
+}
+@keyframes petMotionStart {
+  0% { transform: translateX(-2px) scaleX(1.04) scaleY(0.96); }
+  55% { transform: translateX(2px) translateY(-3px) scaleX(0.99) scaleY(1.02); }
+  100% { transform: translateX(0) translateY(0) scale(1); }
+}
+@keyframes petMotionStop {
+  0% { transform: translateX(2px) rotate(0); }
+  55% { transform: translateX(-2px) rotate(-2deg) scaleX(1.03) scaleY(0.98); }
+  100% { transform: translateX(0) rotate(0) scale(1); }
+}
+@keyframes petMotionTurn {
+  0%, 100% { transform: translateY(0) scaleX(1); }
+  42% { transform: translateY(1px) scaleX(0.82) scaleY(1.03); }
+  58% { transform: translateY(1px) scaleX(0.82) scaleY(1.03); }
 }
 
 
@@ -246,7 +425,7 @@ body.alarm-flash {
 /* 提示气泡 */
 .pet-bubble {
   position: absolute;
-  top: 12px;
+  top: 10px;
   left: 50%;
   right: auto;
   transform: translateX(-50%);
@@ -258,7 +437,7 @@ body.alarm-flash {
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
   white-space: nowrap;
   display: none;
-  max-width: calc(100% - 28px);
+  max-width: calc(100% - 40px);
   overflow: hidden;
   text-overflow: ellipsis;
   text-align: center;
@@ -308,8 +487,9 @@ body.alarm-flash {
 /* 关闭按钮 */
 .pet-close {
   position: absolute;
-  top: 54px;
-  left: calc(50% - 76px);
+  top: 12px;
+  right: 12px;
+  left: auto;
   width: 22px;
   height: 22px;
   border-radius: 50%;
@@ -363,17 +543,18 @@ body.alarm-flash {
 /* 计时器弹窗 */
 .mini-info {
   position: absolute;
-  top: 16px;
-  left: 50%;
-  transform: translateX(-50%);
+  top: 8px;
+  left: 12px;
+  transform: none;
   background: var(--mini-info-bg);
   padding: 10px 15px;
   border-radius: 12px;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
   font-size: 12px;
   color: var(--mini-info-color);
-  min-width: 220px;
-  max-width: calc(100% - 28px);
+  width: calc(100% - 56px);
+  min-width: 0;
+  max-width: none;
   text-align: center;
   display: none;
   transition: background 0.3s ease, color 0.3s ease;
@@ -384,7 +565,6 @@ body.alarm-flash {
 
 .mini-info.show {
   display: block;
-  animation: bubbleIn 0.3s ease;
 }
 
 .mini-info-title {
@@ -397,7 +577,8 @@ body.alarm-flash {
   font-size: 16px;
   font-weight: 700;
   font-family: "Consolas", monospace;
-  white-space: nowrap;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .pet-error {
