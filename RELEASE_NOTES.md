@@ -1,3 +1,12 @@
+## 智域计时 v1.1.3
+
+### 发布包修复
+- Windows Release 同时提供安装版与便携版，并使用清晰的英文文件名
+- Apple Silicon 提供 DMG 与 ZIP，Intel Mac 提供更稳定的 ZIP 内测包
+- 应用功能与 v1.1.2 一致
+
+---
+
 ## 智域计时 v1.1.2
 
 ### macOS 内测版

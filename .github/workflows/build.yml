@@ -35,8 +35,10 @@ jobs:
         include:
           - name: Windows x64
             runner: windows-latest
-            command: npm run build-portable
-            files: dist/*.exe
+            command: npm run build-win
+            files: |
+              dist/Zhiyu-Timer-*-Windows-*-Setup.exe
+              dist/Zhiyu-Timer-*-Windows-*-Portable.exe
           - name: macOS Apple Silicon
             runner: macos-15
             command: npm run build-mac-arm64
@@ -46,9 +48,7 @@ jobs:
           - name: macOS Intel
             runner: macos-15-intel
             command: npm run build-mac-x64
-            files: |
-              dist/*-x64.dmg
-              dist/*-x64.zip
+            files: dist/*-x64.zip
     runs-on: ${{ matrix.runner }}
     name: ${{ matrix.name }}
     steps:
@@ -59,7 +59,7 @@ jobs:
           node-version: '22'
       - name: Install dependencies
         run: npm install
-      - name: Build portable exe
+      - name: Build release packages
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: ${{ matrix.command }}
