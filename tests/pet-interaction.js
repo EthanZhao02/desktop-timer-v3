@@ -92,7 +92,7 @@ async function run() {
   await sleep(1600); // 等待 init 与欢迎气泡
   await injectPageHelpers();
 
-  // ---- 1. 交互区域：椭圆判定（透明四角排除）----
+  // ---- 1. 交互区域：椭圆判定（透明四角排除，角色边缘可交互）----
   var rectTest = await evalJs(`(function(){
     var r = document.getElementById('petImage').getBoundingClientRect();
     var cx = r.left + r.width/2, cy = r.top + r.height/2;
@@ -100,13 +100,13 @@ async function run() {
     return {
       center: window.__petTest.isInsidePetInteractionArea(cx, cy),
       corner: window.__petTest.isInsidePetInteractionArea(r.left, r.top),
-      nearCorner: window.__petTest.isInsidePetInteractionArea(r.left + w*0.10, r.top + h*0.10),
+      nearCorner: window.__petTest.isInsidePetInteractionArea(r.left + w*0.03, r.top + h*0.03),
       inner: window.__petTest.isInsidePetInteractionArea(r.left + w*0.30, r.top + h*0.30)
     };
   })()`);
   ok('交互区域：中心点可交互', rectTest.center === true, JSON.stringify(rectTest));
   ok('交互区域：透明四角不误触', rectTest.corner === false, JSON.stringify(rectTest));
-  ok('交互区域：近角透明区不误触', rectTest.nearCorner === false, JSON.stringify(rectTest));
+  ok('交互区域：贴角透明区不误触', rectTest.nearCorner === false, JSON.stringify(rectTest));
   ok('交互区域：主体内部可交互', rectTest.inner === true, JSON.stringify(rectTest));
 
   // ---- 2. 状态切换去重 ----
@@ -156,6 +156,26 @@ async function run() {
   ok('拖动调用 setWindowPos', afterDrag.setWindowPos.length > posBefore, 'moves=' + afterDrag.setWindowPos.length);
   ok('拖动不触发单击', afterDrag.showMain === showMainBeforeDrag, 'showMain=' + afterDrag.showMain);
   ok('拖动结束恢复 idle', (await evalJs('window.__petTest.state')) === 'idle');
+
+  // ---- 6b. 椭圆外拖动：角色边缘/近角按下也可移动窗口 ----
+  var posBeforeEdge = (await evalJs('window.api.__test.getCalls()')).setWindowPos.length || 0;
+  var edgePoint = await evalJs(`(function(){
+    var r = document.getElementById('petImage').getBoundingClientRect();
+    return { x: Math.round(r.left + r.width*0.10), y: Math.round(r.top + r.height*0.10) };
+  })()`);
+  await evalJs('window.__firePointer("pointerdown", ' + edgePoint.x + ', ' + edgePoint.y + '); true;');
+  await sleep(30);
+  for (var j = 1; j <= 4; j++) {
+    var nx2 = edgePoint.x + Math.round(30 * j / 4);
+    var ny2 = edgePoint.y + Math.round(20 * j / 4);
+    await evalJs('window.__firePointer("pointermove", ' + nx2 + ', ' + ny2 + ', ' + (edgePoint.x + 30) + ', ' + (edgePoint.y + 20) + '); true;');
+    await sleep(20);
+  }
+  await evalJs('window.__firePointer("pointerup", ' + (edgePoint.x + 30) + ', ' + (edgePoint.y + 20) + '); true;');
+  await sleep(150);
+  var afterEdgeDrag = await evalJs('window.api.__test.getCalls()');
+  ok('椭圆外也可拖动窗口', afterEdgeDrag.setWindowPos.length > posBeforeEdge, 'moves=' + afterEdgeDrag.setWindowPos.length);
+  ok('椭圆外拖动结束恢复 idle', (await evalJs('window.__petTest.state')) === 'idle');
 
   // ---- 7. 锁屏 / 解锁（外部活动为 work 时解锁稳定恢复 work）----
   await evalJs('window.api.__test.emit("petActivity", { state: "work", source: "test" }); true;');

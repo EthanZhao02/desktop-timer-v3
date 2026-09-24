@@ -565,20 +565,21 @@ try {
 
   var dragging = false;
   var dragStartX = 0, dragStartY = 0;
+  var dragStartClientX = 0, dragStartClientY = 0;
   var winStartX = 0, winStartY = 0;
   var hasDragged = false;
 
   // 透明区域允许鼠标穿透；进入宠物本体或控件时恢复交互。
   var petMouseEventsEnabled = null;
 
-  // 交互区域：以角色中心为椭圆（角色素材整体呈竖椭圆，主体约占宽 90% / 高 120%），
-  // 透明四角不再误触，避免点到透明像素就打开计时器。
+  // 交互区域：以角色中心为椭圆（角色素材整体呈竖椭圆，主体约占宽 110% / 高 150%），
+  // 覆盖角色头部、手臂、尾巴等可见边缘，透明四角不再误触。
   function pointInPetEllipse(x, y) {
     var rect = petImage.getBoundingClientRect();
     var cx = rect.left + rect.width / 2;
     var cy = rect.top + rect.height / 2;
-    var rx = rect.width * 0.45;
-    var ry = rect.height * 0.60;
+    var rx = rect.width * 0.55;
+    var ry = rect.height * 0.75;
     var dx = (x - cx) / rx;
     var dy = (y - cy) / ry;
     return dx * dx + dy * dy <= 1;
@@ -617,16 +618,18 @@ try {
 
   petImage.addEventListener('pointerdown', function(e) {
     if (e.button !== 0) return;
-    // 落在透明四角时不启动拖动/点击（与椭圆交互区域一致）
-    if (!pointInPetEllipse(e.clientX, e.clientY)) return;
+    // 任意位置都允许开始拖动；透明四角"单击不误触"在松手时再判定。
     dragging = true;
     stateBeforeOverride = currentPetState;
-    setPetState('drag');
     hasDragged = false;
+    // 先记录起点（即使 setPetState 异常也不影响拖动坐标）
     dragStartX = e.screenX;
     dragStartY = e.screenY;
+    dragStartClientX = e.clientX;
+    dragStartClientY = e.clientY;
     winStartX = window.screenX;
     winStartY = window.screenY;
+    setPetState('drag');
     petMouseEventsEnabled = true;
     if (window.api && window.api.setPetMouseEvents) window.api.setPetMouseEvents(true);
     petImage.setPointerCapture(e.pointerId);
@@ -641,8 +644,10 @@ try {
 
   petImage.addEventListener('pointermove', function(e) {
     if (!dragging) return;
-    var dx = e.screenX - dragStartX;
-    var dy = e.screenY - dragStartY;
+    // 用 clientX/clientY 差值（CSS 像素 = 窗口 DIP）移动窗口，
+    // 避免高分屏缩放下 screenX（物理像素）与 window.screenX（DIP）混用导致漂移。
+    var dx = e.clientX - dragStartClientX;
+    var dy = e.clientY - dragStartClientY;
     if (!hasDragged && (Math.abs(dx) > 3 || Math.abs(dy) > 3)) {
       hasDragged = true;
     }
@@ -665,7 +670,10 @@ try {
     document.body.style.cursor = '';
     if (!hasDragged) {
       setPetState(stateBeforeOverride === 'drag' ? 'idle' : stateBeforeOverride);
-      handlePetClick();
+      // 只在角色椭圆内单击才打开计时器，透明四角单击不误触
+      if (pointInPetEllipse(e.clientX, e.clientY)) {
+        handlePetClick();
+      }
     } else {
       // 拖动结束，恢复动画
       petImage.style.animationPlayState = '';
