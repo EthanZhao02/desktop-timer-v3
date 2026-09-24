@@ -42,6 +42,13 @@ assert.match(packagedMain, /PET_WINDOW_HEIGHT\s*=\s*280/, 'Packaged pet window h
 assert.match(packagedMain, /PET_PANEL_WIDTH\s*=\s*440/, 'Packaged pet panel width is stale');
 assert.match(packagedMain, /PET_PANEL_HEIGHT\s*=\s*600/, 'Packaged pet panel height is stale');
 assert.match(packagedMain, /process\.platform\s*!==\s*['"]win32['"]/, 'macOS platform guard is missing');
+// 回归防线：set-window-pos 的 clamp 调用必须带 display.workArea，
+// 否则 clampWindowPosition 内部访问 workArea.x 抛 TypeError，宠物永远拖不动。
+assert.match(
+  packagedMain,
+  /clampWindowPosition\([\s\S]{0,400}?display\.workArea/,
+  'set-window-pos clamp call is missing display.workArea (pet drag regression)',
+);
 assert.ok(sourcePackage.build && sourcePackage.build.mac, 'macOS build configuration is missing');
 assert.match(packagedPetCss, /width:\s*100vw;[\s\S]*height:\s*100vh;/, 'Pet surface contract is missing');
 assert.match(

@@ -1429,11 +1429,13 @@ ipcMain.handle('show-main', () => showMainWindow());
 ipcMain.handle('set-window-pos', (e, x, y) => {
   if (!petWindow || petWindow.isDestroyed()) return false;
   const bounds = petWindow.getBounds();
+  const display = screen.getDisplayMatching(bounds);
   const next = clampWindowPosition(
     Number.isFinite(x) ? Math.round(x) : bounds.x,
     Number.isFinite(y) ? Math.round(y) : bounds.y,
     bounds.width,
     bounds.height,
+    display.workArea,
   );
   petWindow.setPosition(next.x, next.y, false);
   return next;

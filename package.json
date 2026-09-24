@@ -9,6 +9,7 @@
     "dev": "electron . --enable-logging",
     "test:ui": "electron tests/capture-ui.js",
     "test:pet": "electron tests/pet-interaction.js",
+    "test:drag": "electron tests/drag-smoke.js",
     "verify:package": "node tests/verify-package.js",
     "build": "electron-builder",
     "build-win": "electron-builder --win nsis portable --x64 --publish never",
