@@ -835,6 +835,7 @@ function createPetWindow() {
     }
   });
   petWindow.once('ready-to-show', () => {
+    normalizePetWindowBounds(false);
     petWindow.show();
     petWindow.setSize(PET_WINDOW_WIDTH, PET_WINDOW_HEIGHT, false);
     applyPetAlwaysOnTop();
@@ -843,7 +844,29 @@ function createPetWindow() {
     safeError('[main] pet window load failed:', code, desc);
   });
 
-  petWindow.on('maximize', () => petWindow.unmaximize());
+  let correctingPetBounds = false;
+  const enforcePetWindowBounds = () => {
+    if (!petWindow || petWindow.isDestroyed() || correctingPetBounds) return;
+    const bounds = petWindow.getBounds();
+    const validCompact = bounds.width === PET_WINDOW_WIDTH && bounds.height === PET_WINDOW_HEIGHT;
+    const validPanel = bounds.width === PET_PANEL_WIDTH && bounds.height === PET_PANEL_HEIGHT;
+    if (validCompact || validPanel) return;
+
+    correctingPetBounds = true;
+    safeError(`[main] corrected abnormal pet window bounds: ${bounds.width}x${bounds.height}`);
+    normalizePetWindowBounds(false);
+    correctingPetBounds = false;
+  };
+
+  petWindow.on('resize', enforcePetWindowBounds);
+  petWindow.on('maximize', () => {
+    petWindow.unmaximize();
+    normalizePetWindowBounds(false);
+  });
+  petWindow.on('enter-full-screen', () => {
+    petWindow.setFullScreen(false);
+    normalizePetWindowBounds(false);
+  });
 
   petWindow.on('close', (e) => {
     if (!isQuitting) {
@@ -867,6 +890,26 @@ function resizePetWindow(panelVisible) {
   const y = Math.max(workArea.y, Math.min(bottom - targetHeight, workArea.y + workArea.height - targetHeight));
 
   petWindow.setBounds({ x, y, width: targetWidth, height: targetHeight }, false);
+}
+
+// 防止旧版本留下的异常窗口尺寸在升级后继续污染桌面宠物。
+// 宠物窗口只允许使用普通尺寸或面板尺寸，其他尺寸一律按当前面板状态复位。
+function normalizePetWindowBounds(panelVisible = false) {
+  if (!petWindow || petWindow.isDestroyed()) return;
+
+  const bounds = petWindow.getBounds();
+  const targetWidth = panelVisible ? PET_PANEL_WIDTH : PET_WINDOW_WIDTH;
+  const targetHeight = panelVisible ? PET_PANEL_HEIGHT : PET_WINDOW_HEIGHT;
+  const display = screen.getDisplayMatching(bounds);
+  const workArea = display.workArea;
+  const right = bounds.x + bounds.width;
+  const bottom = bounds.y + bounds.height;
+  const x = Math.max(workArea.x, Math.min(right - targetWidth, workArea.x + workArea.width - targetWidth));
+  const y = Math.max(workArea.y, Math.min(bottom - targetHeight, workArea.y + workArea.height - targetHeight));
+
+  if (bounds.width !== targetWidth || bounds.height !== targetHeight || bounds.x !== x || bounds.y !== y) {
+    petWindow.setBounds({ x, y, width: targetWidth, height: targetHeight }, false);
+  }
 }
 
 function buildTrayMenu() {
@@ -1328,7 +1371,18 @@ ipcMain.handle('show-notification', (e, payload) => {
 });
 ipcMain.handle('hide-pet', () => { if (petWindow) petWindow.hide(); });
 ipcMain.handle('show-main', () => showMainWindow());
-ipcMain.handle('set-window-pos', (e, x, y) => { if (petWindow) petWindow.setPosition(x, y); return true; });
+ipcMain.handle('set-window-pos', (e, x, y) => {
+  if (!petWindow || petWindow.isDestroyed()) return false;
+  const bounds = petWindow.getBounds();
+  const next = clampWindowPosition(
+    Number.isFinite(x) ? Math.round(x) : bounds.x,
+    Number.isFinite(y) ? Math.round(y) : bounds.y,
+    bounds.width,
+    bounds.height,
+  );
+  petWindow.setPosition(next.x, next.y, false);
+  return next;
+});
 ipcMain.handle('move-pet-by', (e, dx, dy) => {
   if (!petWindow || petWindow.isDestroyed()) return null;
   const bounds = petWindow.getBounds();
@@ -1814,6 +1868,7 @@ ipcMain.handle('get-model-configs', () => {
 ipcMain.on('pet-panel-visible', (event, visible) => {
   if (petWindow && !petWindow.isDestroyed()) {
     resizePetWindow(Boolean(visible));
+    if (!visible) normalizePetWindowBounds(false);
     if (visible) {
       applyPetAlwaysOnTop();
       petWindow.moveTop();

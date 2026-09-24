@@ -571,31 +571,19 @@ try {
 
   // 透明区域允许鼠标穿透；进入宠物本体或控件时恢复交互。
   var petMouseEventsEnabled = null;
-  var hitTestCanvas = document.createElement('canvas');
-  var hitTestContext = hitTestCanvas.getContext('2d', { willReadFrequently: true });
-  var hitTestImageSrc = '';
-
-  function isOpaquePetPixel(x, y) {
-    var rect = petImg.getBoundingClientRect();
-    if (x < rect.left || x >= rect.right || y < rect.top || y >= rect.bottom) return false;
-    if (!petImg.complete || !petImg.naturalWidth || !petImg.naturalHeight || !hitTestContext) return true;
-    if (hitTestImageSrc !== petImg.currentSrc) {
-      hitTestCanvas.width = petImg.naturalWidth;
-      hitTestCanvas.height = petImg.naturalHeight;
-      hitTestContext.clearRect(0, 0, hitTestCanvas.width, hitTestCanvas.height);
-      hitTestContext.drawImage(petImg, 0, 0);
-      hitTestImageSrc = petImg.currentSrc;
-    }
-    var imageX = Math.min(hitTestCanvas.width - 1, Math.max(0, Math.floor((x - rect.left) * hitTestCanvas.width / rect.width)));
-    var imageY = Math.min(hitTestCanvas.height - 1, Math.max(0, Math.floor((y - rect.top) * hitTestCanvas.height / rect.height)));
-    return hitTestContext.getImageData(imageX, imageY, 1, 1).data[3] > 20;
+  function isInsidePetInteractionArea(x, y) {
+    var rect = petImage.getBoundingClientRect();
+    var padding = 6;
+    return x >= rect.left - padding && x < rect.right + padding &&
+      y >= rect.top - padding && y < rect.bottom + padding;
   }
 
   function updatePetHitTesting(e) {
     if (!window.api || !window.api.setPetMouseEvents) return;
     var target = document.elementFromPoint(e.clientX, e.clientY);
-    var controlHit = Boolean(target && target.closest('#petClose, #petChatPanel, #petSettingsPanel'));
-    var interactive = controlHit || isOpaquePetPixel(e.clientX, e.clientY);
+    var controlHit = Boolean(target && target.closest('#petClose, #petChatPanel, #petSettingsPanel, #petTime, #miniInfo'));
+    // 人物矩形范围始终保持可交互。透明像素和骨骼动画不再造成拖动死区。
+    var interactive = dragging || controlHit || isInsidePetInteractionArea(e.clientX, e.clientY);
     var petContainer = document.getElementById('petContainer');
     if (petContainer) petContainer.classList.toggle('controls-visible', interactive);
     if (interactive === petMouseEventsEnabled) return;
@@ -606,7 +594,7 @@ try {
   document.addEventListener('mouseleave', function() {
     var petContainer = document.getElementById('petContainer');
     if (petContainer) petContainer.classList.remove('controls-visible');
-    if (petMouseEventsEnabled !== false && window.api && window.api.setPetMouseEvents) {
+    if (!dragging && petMouseEventsEnabled !== false && window.api && window.api.setPetMouseEvents) {
       petMouseEventsEnabled = false;
       window.api.setPetMouseEvents(false);
     }
@@ -618,10 +606,12 @@ try {
     stateBeforeOverride = currentPetState;
     setPetState('drag');
     hasDragged = false;
-    dragStartX = e.clientX;
-    dragStartY = e.clientY;
+    dragStartX = e.screenX;
+    dragStartY = e.screenY;
     winStartX = window.screenX;
     winStartY = window.screenY;
+    petMouseEventsEnabled = true;
+    if (window.api && window.api.setPetMouseEvents) window.api.setPetMouseEvents(true);
     petImage.setPointerCapture(e.pointerId);
     petImage.style.cursor = 'grabbing';
     // 拖动开始：隐藏浮动元素
@@ -634,8 +624,8 @@ try {
 
   petImage.addEventListener('pointermove', function(e) {
     if (!dragging) return;
-    var dx = e.clientX - dragStartX;
-    var dy = e.clientY - dragStartY;
+    var dx = e.screenX - dragStartX;
+    var dy = e.screenY - dragStartY;
     if (!hasDragged && (Math.abs(dx) > 3 || Math.abs(dy) > 3)) {
       hasDragged = true;
     }
