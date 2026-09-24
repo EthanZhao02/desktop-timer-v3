@@ -63,10 +63,18 @@ jobs:
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: ${{ matrix.command }}
+      # 从 RELEASE_NOTES.md 截取顶部最新版本段落作为 Release 正文（自动带版本定位/更新内容等）
+      - name: Prepare release body
+        shell: bash
+        run: |
+          awk '/^## /{f=1} f{print} /^---$/{if(f) exit}' RELEASE_NOTES.md > release-body.md
+          echo "--- release-body.md ---"
+          cat release-body.md
       - name: Upload release asset
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
           files: ${{ matrix.files }}
+          body_path: release-body.md
           draft: false
           prerelease: false
