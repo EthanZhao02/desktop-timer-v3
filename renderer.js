@@ -98,6 +98,10 @@ try {
   var faceDetectionBusy = false;
   var blinkSawOpenEyes = false;
   var blinkVerified = false;
+  var blinkStreak = 0;            // 连续确认帧数，避免单帧误判
+  var blinkFrameCount = 0;        // 隔帧检测计数（降低 CPU 开销）
+  var cameraVerifyDeadline = 0;   // 摄像头验证超时时间戳
+  var CAMERA_VERIFY_TIMEOUT_MS = 120000; // 120 秒无结果自动转备用验证码
 
   function setPetActivity(state, source, options) {
     if (!window.api || !window.api.setPetActivity) return;
@@ -152,6 +156,7 @@ try {
     alarmFallbackCode: document.getElementById("alarmFallbackCode"),
     alarmFallbackInput: document.getElementById("alarmFallbackInput"),
     retryAlarmCameraBtn: document.getElementById("retryAlarmCameraBtn"),
+    alarmFallbackLinkBtn: document.getElementById("alarmFallbackLinkBtn"),
     verifyAlarmStopBtn: document.getElementById("verifyAlarmStopBtn"),
     directAlarmStopBtn: document.getElementById("directAlarmStopBtn"),
     clearLapsBtn: document.getElementById("clearLapsBtn"),
@@ -663,6 +668,9 @@ try {
 
   function showAlarmFallback(message) {
     stopAlarmCamera();
+    blinkStreak = 0;
+    blinkFrameCount = 0;
+    cameraVerifyDeadline = 0;
     alarmFallbackCode = String(Math.floor(1000 + Math.random() * 9000));
     el.alarmCameraPanel.classList.add("is-hidden");
     el.alarmFallbackPanel.classList.remove("is-hidden");
@@ -722,13 +730,22 @@ try {
 
   function runBlinkDetection() {
     if (!alarmCameraStream || blinkVerified) return;
+    // 摄像头验证超时：120 秒仍未检测到眨眼，自动转备用验证码，避免一直挂起
+    if (cameraVerifyDeadline && Date.now() > cameraVerifyDeadline) {
+      showAlarmFallback("摄像头验证超时，请使用屏幕上的备用验证码");
+      return;
+    }
     faceDetectionFrame = requestAnimationFrame(runBlinkDetection);
     if (faceDetectionBusy || el.alarmCameraVideo.readyState < 2) return;
+    // 隔帧检测：降低人脸检测 CPU 开销
+    blinkFrameCount++;
+    if (blinkFrameCount % 2 !== 0) return;
     faceDetectionBusy = true;
     try {
       var result = faceLandmarker.detectForVideo(el.alarmCameraVideo, performance.now());
       var shapes = result.faceBlendshapes && result.faceBlendshapes[0];
       if (!shapes || !shapes.categories) {
+        blinkStreak = 0;
         el.alarmCameraStatus.textContent = "未检测到人脸，请正对摄像头";
         return;
       }
@@ -743,12 +760,18 @@ try {
         }
         return;
       }
-      if (left > 0.52 && right > 0.52) {
-        blinkVerified = true;
-        el.alarmCameraStatus.textContent = "眨眼验证成功，可以停止闹钟";
-        el.alarmVerificationHint.textContent = "已确认是真人操作，照片不会保存或上传";
-        el.verifyAlarmStopBtn.textContent = "停止闹钟";
-        el.verifyAlarmStopBtn.disabled = false;
+      if (left > 0.5 && right > 0.5) {
+        // 连续 2 帧确认眨眼，避免单帧抖动误判
+        blinkStreak++;
+        if (blinkStreak >= 2) {
+          blinkVerified = true;
+          el.alarmCameraStatus.textContent = "眨眼验证成功，可以停止闹钟";
+          el.alarmVerificationHint.textContent = "已确认是真人操作，照片不会保存或上传";
+          el.verifyAlarmStopBtn.textContent = "停止闹钟";
+          el.verifyAlarmStopBtn.disabled = false;
+        }
+      } else {
+        blinkStreak = 0;
       }
     } catch (error) {
       showAlarmFallback("人脸检测运行失败，请使用备用验证码");
@@ -761,6 +784,9 @@ try {
     el.alarmCameraPanel.classList.remove("is-hidden");
     el.alarmFallbackPanel.classList.add("is-hidden");
     el.alarmCameraStatus.textContent = "正在请求摄像头权限...";
+    blinkStreak = 0;
+    blinkFrameCount = 0;
+    cameraVerifyDeadline = Date.now() + CAMERA_VERIFY_TIMEOUT_MS;
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error("camera-unavailable");
       alarmCameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
@@ -788,6 +814,8 @@ try {
     if (needsPhoto) {
       blinkSawOpenEyes = false;
       blinkVerified = false;
+      blinkStreak = 0;
+      blinkFrameCount = 0;
       el.alarmVerificationHint.textContent = "检测到人脸并完成一次眨眼后才能停止";
       el.verifyAlarmStopBtn.textContent = "完成眨眼后停止";
       el.verifyAlarmStopBtn.disabled = true;
@@ -819,10 +847,18 @@ try {
     el.retryAlarmCameraBtn.onclick = function() {
       blinkSawOpenEyes = false;
       blinkVerified = false;
+      blinkStreak = 0;
+      blinkFrameCount = 0;
       el.verifyAlarmStopBtn.disabled = true;
       el.verifyAlarmStopBtn.textContent = "完成眨眼后停止";
       startAlarmCamera();
     };
+    if (el.alarmFallbackLinkBtn) {
+      // "改用备用验证码"：摄像头不可用/不想用人脸时手动切换
+      el.alarmFallbackLinkBtn.onclick = function() {
+        showAlarmFallback("已切换到备用验证码，请输入下方数字后停止闹钟");
+      };
+    }
     el.alarmFallbackInput.onkeydown = function(event) {
       if (event.key === "Enter") verifyPhotoAndStopAlarm();
     };
@@ -1355,7 +1391,7 @@ try {
     }
 
     // ==================== 起床听歌 ====================
-    var MUSIC_APP_LABELS = { netease: "网易云音乐", kugou: "酷狗音乐", qishui: "汽水音乐", custom: "自定义应用" };
+    var MUSIC_APP_LABELS = { netease: "网易云音乐", kugou: "酷狗音乐", qq: "QQ音乐", kuwo: "酷我音乐", migu: "咪咕音乐", spotify: "Spotify", foobar2000: "foobar2000", qishui: "汽水音乐", custom: "自定义应用" };
     var musicPlatformSupported = true;
     function isQishuiMusicSetting(ms) {
       if (!ms) return false;

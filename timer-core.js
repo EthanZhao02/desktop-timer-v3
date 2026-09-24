@@ -19,7 +19,7 @@ const DEFAULT_DATA = Object.freeze({
 // 自定义铃声上传大小上限：100 MB
 const MAX_RINGTONE_BYTES = 100 * 1024 * 1024;
 const MUSIC_MODES = new Set(['熟悉模式', '新鲜模式', '起床', '洗澡', '图书馆', '动感健身', '深夜EMO', 'DJ模式', '助眠模式']);
-const MUSIC_APPS = new Set(['netease', 'kugou', 'qishui', 'custom']);
+const MUSIC_APPS = new Set(['netease', 'kugou', 'qishui', 'qq', 'kuwo', 'migu', 'spotify', 'foobar2000', 'custom']);
 
 function normalizeRingtoneKey(value) {
   if (typeof value !== 'string' || !value) return '';
@@ -180,11 +180,29 @@ function clampWindowPosition(x, y, width, height, workArea) {
   };
 }
 
+// 根据锁屏/解锁时间生成睡眠时长文案（供主进程通知与自动化测试使用）
+// 返回 { minutes, text }；时长不足 1 分钟或时间非法时 text 为空字符串。
+function formatSleepDuration(lockTime, unlockTime) {
+  const locked = Number(lockTime);
+  const unlocked = Number(unlockTime);
+  if (!Number.isFinite(locked) || !Number.isFinite(unlocked) || unlocked <= locked) {
+    return { minutes: 0, text: '' };
+  }
+  const minutes = Math.floor((unlocked - locked) / 60000);
+  if (minutes < 1) return { minutes: 0, text: '' };
+  if (minutes < 2) return { minutes, text: '刚打了个盹~' };
+  if (minutes < 60) return { minutes, text: `我刚睡了 ${minutes} 分钟~` };
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return { minutes, text: `我刚睡了 ${h} 小时${m > 0 ? ` ${m} 分钟` : ''}~` };
+}
+
 module.exports = {
   DEFAULT_DATA,
   MAX_RINGTONE_BYTES,
   clampWindowPosition,
   collectDueAlarms,
+  formatSleepDuration,
   normalizeImportedData,
   readJsonWithBackup,
   validateRingtone,

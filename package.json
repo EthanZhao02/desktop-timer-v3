@@ -1,6 +1,6 @@
 {
   "name": "zhiyu-timer",
-  "version": "1.1.4",
+  "version": "1.2.0",
   "description": "智域计时 - 桌面计时器与桌面宠物",
   "main": "main.js",
   "scripts": {
@@ -8,6 +8,7 @@
     "start": "electron .",
     "dev": "electron . --enable-logging",
     "test:ui": "electron tests/capture-ui.js",
+    "test:pet": "electron tests/pet-interaction.js",
     "verify:package": "node tests/verify-package.js",
     "build": "electron-builder",
     "build-win": "electron-builder --win nsis portable --x64 --publish never",
@@ -65,12 +66,14 @@
       "pet.css",
       "pet.js",
       "assets/**/*",
+      "!assets/zhiyu-character-source.png",
       "package.json"
     ],
     "asarUnpack": [
       "assets/icon.ico",
       "assets/icon.png",
-      "assets/tray-icon.png"
+      "assets/tray-icon.png",
+      "assets/mediapipe/**/*"
     ]
   }
 }

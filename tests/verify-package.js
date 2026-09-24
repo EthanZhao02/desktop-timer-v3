@@ -52,4 +52,27 @@ assert.match(
 assert.doesNotMatch(packagedIndex, /unsafe-inline/, 'Packaged index CSP still allows inline code');
 assert.doesNotMatch(packagedPet, /unsafe-inline/, 'Packaged pet CSP still allows inline code');
 
+// ---- 校验 asarUnpack 资源：窗口/托盘图标与 mediapipe 必须解到真实文件系统 ----
+const unpackedRoot = path.join(root, 'dist', 'win-unpacked', 'resources', 'app.asar.unpacked');
+const requiredUnpacked = [
+  'assets/icon.ico',
+  'assets/icon.png',
+  'assets/tray-icon.png',
+  'assets/mediapipe/face_landmarker.task',
+  'assets/mediapipe/vision_bundle.js',
+];
+for (const rel of requiredUnpacked) {
+  assert.ok(
+    fs.existsSync(path.join(unpackedRoot, rel)),
+    `Unpacked resource missing: ${rel}（nativeImage / MediaPipe 无法从 asar 读取）`,
+  );
+}
+
+// ---- 校验 files 排除规则：未引用的超大原图不应打入安装包 ----
+const asarFiles = asar.listPackage(archive);
+assert.ok(
+  !asarFiles.some((f) => /zhiyu-character-source\.png$/.test(f)),
+  'assets/zhiyu-character-source.png should be excluded from the package',
+);
+
 console.log('Packaged application matches the reviewed source.');

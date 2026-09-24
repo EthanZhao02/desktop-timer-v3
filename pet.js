@@ -58,6 +58,23 @@ try {
     peeking:     "偷偷看你~"
   };
 
+  var lastBubbleText = "";
+  var POSE_BUBBLE_MS = 2500; // 气泡显示时长（精简提示，缩短为 2.5s）
+
+  // 统一姿态气泡：同文本不重复弹出，避免连续切换时提示闪烁
+  function showPoseBubble(text) {
+    if (!petBubble || !text || isAlarmActive) return;
+    clearTimeout(bubblePoseTimer);
+    if (text === lastBubbleText && petBubble.className.indexOf("show") !== -1) return;
+    lastBubbleText = text;
+    petBubble.textContent = text;
+    petBubble.className = "pet-bubble show";
+    bubblePoseTimer = setTimeout(function() {
+      if (!isAlarmActive) petBubble.className = "pet-bubble";
+      lastBubbleText = "";
+    }, POSE_BUBBLE_MS);
+  }
+
   var currentPose = "idle";
   var currentPetState = "idle";
   var isAlarmActive = false;
@@ -247,7 +264,20 @@ try {
     var state = PET_STATES[stateName] || PET_STATES.idle;
     if (isAlarmActive && stateName !== 'celebrate') return;
     var previousState = currentPetState;
-    currentPetState = PET_STATES[stateName] ? stateName : 'idle';
+    var requested = PET_STATES[stateName] ? stateName : 'idle';
+
+    // 相同状态去重：避免自动状态机反复随机重选姿态造成跳变。
+    // 待机时允许随机换一个待机姿态（微动作，更生动）；有明确 pose 时只切姿态。
+    if (requested === currentPetState) {
+      if (options && options.pose && options.pose !== currentPose) {
+        switchPose(options.pose);
+      } else if (requested === 'idle' && !options && state.poses.length > 1) {
+        switchPose(randomPick(state.poses));
+      }
+      return;
+    }
+
+    currentPetState = requested;
     var container = document.getElementById('petContainer');
     if (container) {
       Object.keys(PET_STATES).forEach(function(name) { container.classList.remove('state-' + name); });
@@ -286,15 +316,7 @@ try {
       poseTransitionTimer = null;
       petImg.style.opacity = "0";
       boneStart(walkMode);
-      clearTimeout(bubblePoseTimer);
-      var wbubble = poseBubbles["walking"];
-      if (wbubble && !isAlarmActive) {
-        petBubble.textContent = wbubble;
-        petBubble.className = "pet-bubble show";
-        bubblePoseTimer = setTimeout(function() {
-          if (!isAlarmActive) petBubble.className = "pet-bubble";
-        }, 3500);
-      }
+      if (!isAlarmActive) showPoseBubble(poseBubbles["walking"]);
       console.log("[Pet] Bone walk -> " + walkMode);
       return true;
     }
@@ -307,16 +329,7 @@ try {
       petImg.src = POSES[poseName];
       petImg.style.opacity = "1";
       boneStop();
-
-      clearTimeout(bubblePoseTimer);
-      var restoredBubble = poseBubbles[poseName];
-      if (restoredBubble && !isAlarmActive) {
-        petBubble.textContent = restoredBubble;
-        petBubble.className = "pet-bubble show";
-        bubblePoseTimer = setTimeout(function() {
-          if (!isAlarmActive) petBubble.className = "pet-bubble";
-        }, 3500);
-      }
+      if (!isAlarmActive) showPoseBubble(poseBubbles[poseName]);
       console.log("[Pet] Pose -> " + poseName);
       return true;
     }
@@ -337,17 +350,7 @@ try {
       petImg.src = POSES[poseName];
       // 淡入
       petImg.style.opacity = "1";
-
-      // 显示姿态气泡
-      clearTimeout(bubblePoseTimer);
-      var bubble = poseBubbles[poseName];
-      if (bubble && !isAlarmActive) {
-        petBubble.textContent = bubble;
-        petBubble.className = "pet-bubble show";
-        bubblePoseTimer = setTimeout(function() {
-          if (!isAlarmActive) petBubble.className = "pet-bubble";
-        }, 3500);
-      }
+      if (!isAlarmActive) showPoseBubble(poseBubbles[poseName]);
       poseTransitionTimer = null;
     }, 280);
 
@@ -545,17 +548,13 @@ try {
     }, matched ? 8000 : 2500);
   }
 
-  // 带气泡的姿态切换
+  // 带气泡的姿态切换（气泡延迟 300ms 展示，避免与淡入重叠）
   function switchPoseWithBubble(poseName, bubble) {
     if (poseName !== currentPose) switchPose(poseName);
     if (bubble && !isAlarmActive) {
       clearTimeout(bubblePoseTimer);
       setTimeout(function() {
-        petBubble.textContent = bubble;
-        petBubble.className = "pet-bubble show";
-        bubblePoseTimer = setTimeout(function() {
-          if (!isAlarmActive) petBubble.className = "pet-bubble";
-        }, 4000);
+        showPoseBubble(bubble);
       }, 300);
     }
   }
@@ -571,24 +570,40 @@ try {
 
   // 透明区域允许鼠标穿透；进入宠物本体或控件时恢复交互。
   var petMouseEventsEnabled = null;
-  function isInsidePetInteractionArea(x, y) {
+
+  // 交互区域：以角色中心为椭圆（角色素材整体呈竖椭圆，主体约占宽 90% / 高 120%），
+  // 透明四角不再误触，避免点到透明像素就打开计时器。
+  function pointInPetEllipse(x, y) {
     var rect = petImage.getBoundingClientRect();
-    var padding = 6;
-    return x >= rect.left - padding && x < rect.right + padding &&
-      y >= rect.top - padding && y < rect.bottom + padding;
+    var cx = rect.left + rect.width / 2;
+    var cy = rect.top + rect.height / 2;
+    var rx = rect.width * 0.45;
+    var ry = rect.height * 0.60;
+    var dx = (x - cx) / rx;
+    var dy = (y - cy) / ry;
+    return dx * dx + dy * dy <= 1;
+  }
+  function isInsidePetInteractionArea(x, y) {
+    return pointInPetEllipse(x, y);
   }
 
+  var petHitTestPending = false;
   function updatePetHitTesting(e) {
-    if (!window.api || !window.api.setPetMouseEvents) return;
-    var target = document.elementFromPoint(e.clientX, e.clientY);
-    var controlHit = Boolean(target && target.closest('#petClose, #petChatPanel, #petSettingsPanel, #petTime, #miniInfo'));
-    // 人物矩形范围始终保持可交互。透明像素和骨骼动画不再造成拖动死区。
-    var interactive = dragging || controlHit || isInsidePetInteractionArea(e.clientX, e.clientY);
-    var petContainer = document.getElementById('petContainer');
-    if (petContainer) petContainer.classList.toggle('controls-visible', interactive);
-    if (interactive === petMouseEventsEnabled) return;
-    petMouseEventsEnabled = interactive;
-    window.api.setPetMouseEvents(interactive);
+    if (!window.api || !window.api.setPetMouseEvents || petHitTestPending) return;
+    // mousemove 高频触发，用 rAF 节流到帧级别
+    petHitTestPending = true;
+    requestAnimationFrame(function() {
+      petHitTestPending = false;
+      var target = document.elementFromPoint(e.clientX, e.clientY);
+      var controlHit = Boolean(target && target.closest('#petClose, #petChatPanel, #petSettingsPanel, #petTime, #miniInfo'));
+      // 人物椭圆范围始终保持可交互。透明像素和骨骼动画不再造成拖动死区。
+      var interactive = dragging || controlHit || isInsidePetInteractionArea(e.clientX, e.clientY);
+      var petContainer = document.getElementById('petContainer');
+      if (petContainer) petContainer.classList.toggle('controls-visible', interactive);
+      if (interactive === petMouseEventsEnabled) return;
+      petMouseEventsEnabled = interactive;
+      window.api.setPetMouseEvents(interactive);
+    });
   }
   document.addEventListener('mousemove', updatePetHitTesting);
   document.addEventListener('mouseleave', function() {
@@ -602,6 +617,8 @@ try {
 
   petImage.addEventListener('pointerdown', function(e) {
     if (e.button !== 0) return;
+    // 落在透明四角时不启动拖动/点击（与椭圆交互区域一致）
+    if (!pointInPetEllipse(e.clientX, e.clientY)) return;
     dragging = true;
     stateBeforeOverride = currentPetState;
     setPetState('drag');
@@ -714,9 +731,8 @@ try {
       }
 
       if (nearest) {
-        var h = Math.floor(nearestDiff / 60);
-        var m = nearestDiff % 60;
-        nextAlarmTime.textContent = nearest.time + " (" + (h > 0 ? h + "小时" : "") + m + "分后)";
+        // 状态提示精简：只显示最近闹钟时间，不再拼接"x小时x分后"长文案
+        nextAlarmTime.textContent = nearest.time;
         petStatus.className = "pet-status scheduled";  // 有闹钟设置 = 紫色
       } else {
         petStatus.className = "pet-status";  // 默认 = 绿色
@@ -1418,14 +1434,9 @@ try {
           clearTimeout(poseTimer);
           isAlarmActive = false; // 解锁闹钟锁定
           setPetState('sleep');
-          petBubble.textContent = '主人晚安~ Zzz';
-          petBubble.className = 'pet-bubble show';
-          clearTimeout(bubblePoseTimer);
-          bubblePoseTimer = setTimeout(function() {
-            petBubble.className = 'pet-bubble';
-          }, 5000);
+          showPoseBubble('主人晚安~ Zzz');
         } else if (data.type === 'unlocked') {
-          // 解锁：切到 idle + 欢迎气泡
+          // 解锁：切到 idle + 欢迎气泡（精简文案）
           isAlarmActive = false;
           if (externalActivityState === 'work' || externalActivityState === 'music') {
             setPetState(externalActivityState);
@@ -1439,16 +1450,11 @@ try {
           if (sleepMin >= 60) {
             var h = Math.floor(sleepMin / 60);
             var m = sleepMin % 60;
-            msg = '主人回来啦~ 我睡了好久' + (m > 0 ? ' (' + h + 'h' + m + 'm)' : ' (' + h + 'h)');
+            msg = '主人回来啦~ 睡了 ' + h + 'h' + (m > 0 ? m + 'm' : '');
           } else if (sleepMin >= 2) {
-            msg = '主人回来啦~ 我刚睡了 ' + sleepMin + ' 分钟';
+            msg = '主人回来啦~ 睡了 ' + sleepMin + ' 分钟';
           }
-          petBubble.textContent = msg;
-          petBubble.className = 'pet-bubble show';
-          clearTimeout(bubblePoseTimer);
-          bubblePoseTimer = setTimeout(function() {
-            petBubble.className = 'pet-bubble';
-          }, 5000);
+          showPoseBubble(msg);
         }
       });
       console.log("[Pet] 锁屏/解锁检测已启用");
@@ -1485,6 +1491,24 @@ try {
         petBubble.className = "pet-bubble";
       }, 4000);
     }, 1500);
+
+    // 自动化测试钩子（只读内部状态，供 tests/pet-interaction.js 断言使用）
+    try {
+      window.__petTest = {
+        get state() { return currentPetState; },
+        get pose() { return currentPose; },
+        get isDragging() { return dragging; },
+        get hasDragged() { return hasDragged; },
+        get bubbleText() { return petBubble ? petBubble.textContent : ''; },
+        get bubbleShown() { return petBubble ? petBubble.className.indexOf('show') !== -1 : false; },
+        get lastBubbleText() { return lastBubbleText; },
+        isInsidePetInteractionArea: isInsidePetInteractionArea,
+        setPetState: setPetState,
+        switchPose: switchPose,
+        switchPoseWithBubble: switchPoseWithBubble,
+        showPoseBubble: showPoseBubble
+      };
+    } catch (_) {}
 
     console.log("桌面宠物启动成功 ✓ (多姿态模式，12个表情自动切换)");
   }

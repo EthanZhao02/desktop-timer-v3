@@ -298,13 +298,18 @@
               <select id="musicAppSelect" disabled>
                 <option value="netease">网易云音乐</option>
                 <option value="kugou">酷狗音乐</option>
+                <option value="qq">QQ音乐</option>
+                <option value="kuwo">酷我音乐</option>
+                <option value="migu">咪咕音乐</option>
+                <option value="spotify">Spotify</option>
+                <option value="foobar2000">foobar2000</option>
                 <option value="qishui">汽水音乐</option>
                 <option value="custom">自定义应用</option>
               </select>
               <button class="btn btn-small" id="musicAppPathBtn" disabled>选择应用</button>
             </div>
             <div class="settings-path" id="musicAppStatus"></div>
-            <div class="settings-path">场景模式仅对汽水音乐有效；其他应用只负责启动并尝试播放。</div>
+            <div class="settings-path">场景模式仅汽水音乐支持；其余应用自动打开并尝试播放。</div>
             <button class="btn ringtone-btn" id="testMusicAppBtn">测试启动与播放</button>
           </div>
         </div>
@@ -344,6 +349,7 @@
         <video id="alarmCameraVideo" autoplay muted playsinline></video>
         <canvas id="alarmCameraCanvas" class="is-hidden"></canvas>
         <div class="camera-status" id="alarmCameraStatus">正在请求摄像头权限...</div>
+        <button class="btn btn-small" id="alarmFallbackLinkBtn" type="button">摄像头不可用？改用备用验证码</button>
       </div>
       <div class="alarm-fallback is-hidden" id="alarmFallbackPanel">
         <div class="field-help">摄像头不可用，请输入下面的验证码停止闹钟</div>

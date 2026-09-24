@@ -27,6 +27,7 @@ const {
   MAX_RINGTONE_BYTES,
   clampWindowPosition,
   collectDueAlarms,
+  formatSleepDuration,
   normalizeImportedData,
   readJsonWithBackup,
   validateRingtone,
@@ -239,6 +240,50 @@ const MUSIC_APP_PRESETS = {
     paths: [
       'C:\\Program Files (x86)\\KuGou\\KGMusic\\KuGou.exe',
       'C:\\Program Files\\KuGou\\KGMusic\\KuGou.exe'
+    ]
+  },
+  qq: {
+    label: 'QQ音乐',
+    keywords: ['qqmusic', 'qq音乐', 'tencent'],
+    exeNames: ['qqmusic.exe'],
+    paths: [
+      'C:\\Program Files (x86)\\Tencent\\QQMusic\\QQMusic.exe',
+      'C:\\Program Files\\Tencent\\QQMusic\\QQMusic.exe'
+    ]
+  },
+  kuwo: {
+    label: '酷我音乐',
+    keywords: ['kuwo', 'kwmusic', '酷我'],
+    exeNames: ['kwmusic.exe', 'kuwo.exe'],
+    paths: [
+      'C:\\Program Files (x86)\\Kuwo\\KuwoMusic\\KwMusic.exe',
+      'C:\\Program Files\\Kuwo\\KuwoMusic\\KwMusic.exe'
+    ]
+  },
+  migu: {
+    label: '咪咕音乐',
+    keywords: ['migu', '咪咕'],
+    exeNames: ['migu.exe', '咪咕音乐.exe'],
+    paths: [
+      'C:\\Program Files (x86)\\Migu\\MiguMusic\\migu.exe',
+      'C:\\Program Files\\Migu\\MiguMusic\\migu.exe'
+    ]
+  },
+  spotify: {
+    label: 'Spotify',
+    keywords: ['spotify'],
+    exeNames: ['spotify.exe'],
+    paths: [
+      path.join(process.env.APPDATA || '', 'Spotify', 'Spotify.exe')
+    ]
+  },
+  foobar2000: {
+    label: 'foobar2000',
+    keywords: ['foobar2000', 'foobar'],
+    exeNames: ['foobar2000.exe'],
+    paths: [
+      'C:\\Program Files (x86)\\foobar2000\\foobar2000.exe',
+      'C:\\Program Files\\foobar2000\\foobar2000.exe'
     ]
   },
   qishui: {
@@ -740,6 +785,16 @@ function setupAppProtocol() {
     }
     if (requestUrl.hostname !== 'local') return new Response('Not found', { status: 404 });
     const relativePath = decodeURIComponent(requestUrl.pathname).replace(/^[/\\]+/, '');
+    // 打包后优先从 app.asar.unpacked 读取（mediapipe 等大文件 unpack 后直读更快），
+    // 不存在时回退到 asar 内路径。
+    if (app.isPackaged) {
+      const unpackedPath = path.resolve(process.resourcesPath, 'app.asar.unpacked', relativePath || 'index.html');
+      const unpackedRoot = path.resolve(process.resourcesPath, 'app.asar.unpacked');
+      const unpackedPrefix = unpackedRoot.toLowerCase() + path.sep;
+      if (unpackedPath.toLowerCase().startsWith(unpackedPrefix) && fs.existsSync(unpackedPath)) {
+        return net.fetch(pathToFileURL(unpackedPath).toString());
+      }
+    }
     const appRoot = path.resolve(__dirname);
     const filePath = path.resolve(appRoot, relativePath || 'index.html');
     const rootPrefix = appRoot.toLowerCase() + path.sep;
@@ -1735,23 +1790,10 @@ function setupLockDetection() {
 
       // 计算睡眠时长，弹解锁通知
       try {
-        let sleepStr = '';
-        if (lockTime) {
-          const sleepMs = Date.now() - lockTime;
-          const sleepMin = Math.round(sleepMs / 60000);
-          if (sleepMin >= 60) {
-            const h = Math.floor(sleepMin / 60);
-            const m = sleepMin % 60;
-            sleepStr = `我刚睡了 ${h} 小时${m > 0 ? m + ' 分钟' : ''}~`;
-          } else if (sleepMin >= 2) {
-            sleepStr = `我刚睡了 ${sleepMin} 分钟~`;
-          } else if (sleepMin >= 1) {
-            sleepStr = '刚打了个盹~';
-          }
-        }
+        const sleepText = lockTime ? formatSleepDuration(lockTime, Date.now()).text : '';
         new Notification({
           title: '☀️ 主人回来啦',
-          body: sleepStr || '欢迎回来~',
+          body: sleepText || '欢迎回来~',
           silent: true,
           timeoutType: 'default'
         }).show();
